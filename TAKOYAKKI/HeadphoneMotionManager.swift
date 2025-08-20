@@ -19,6 +19,8 @@ enum HeadphoneMotionError: Error, LocalizedError {
     case simulationError
     case initializationError
     
+    
+    
     var errorDescription: String? {
         switch self {
         case .motionManagerUnavailable:
@@ -157,6 +159,7 @@ final class HeadphoneMotionManager: ObservableObject {
     private func initializeMotionManager() async throws {
         // 기존 매니저 정리
         try await cleanup()
+        guard #available(macOS 14.0, *) else { throw HeadphoneMotionError.motionManagerUnavailable }
         
         do {
             // 새로운 매니저 생성
