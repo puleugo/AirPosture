@@ -51,6 +51,9 @@ final class HeadphoneMotionManager: ObservableObject {
     @Published private(set) var poorPosturePercentage: Int = 0         // 나쁜 자세 퍼센트
     @Published private(set) var isSimulationMode: Bool = false         // 시뮬레이션 모드 여부
     @Published private(set) var lastError: String? = nil               // 마지막 에러 메시지
+    @Published private(set) var rotationRate: (x: Double, y: Double, z: Double) = (0, 0, 0) // 회전 속도(rad/s)
+    @Published private(set) var userAcceleration: (x: Double, y: Double, z: Double) = (0, 0, 0) // 사용자 가속도(g)
+    @Published private(set) var gravity: (x: Double, y: Double, z: Double) = (0, 0, 0) // 중력 가속도(g)
 
     // MARK: - Private 속성들
     private var motionManager: CMHeadphoneMotionManager?               // 헤드폰 모션 매니저 (옵셔널)
@@ -269,6 +272,22 @@ final class HeadphoneMotionManager: ObservableObject {
             self.pitch = newPitch
             self.roll = roll
             self.yaw = yaw
+            // 시뮬레이션용 회전/가속/중력 값 생성
+            self.rotationRate = (
+                x: Double.random(in: -2.0...2.0),
+                y: Double.random(in: -2.0...2.0),
+                z: Double.random(in: -2.0...2.0)
+            )
+            self.userAcceleration = (
+                x: Double.random(in: -0.2...0.2),
+                y: Double.random(in: -0.2...0.2),
+                z: Double.random(in: -0.2...0.2)
+            )
+            self.gravity = (
+                x: Double.random(in: -1.0...1.0),
+                y: Double.random(in: -1.0...1.0),
+                z: Double.random(in: -1.0...1.0)
+            )
             self.isDeviceConnected = true
             self.connectionStatus = "시뮬레이션 모드"
 
@@ -293,6 +312,10 @@ final class HeadphoneMotionManager: ObservableObject {
             self.pitch = newPitch
             self.roll = motion.attitude.roll * 180 / .pi
             self.yaw = motion.attitude.yaw * 180 / .pi
+            // 회전 속도 / 사용자 가속도 / 중력
+            self.rotationRate = (x: motion.rotationRate.x, y: motion.rotationRate.y, z: motion.rotationRate.z)
+            self.userAcceleration = (x: motion.userAcceleration.x, y: motion.userAcceleration.y, z: motion.userAcceleration.z)
+            self.gravity = (x: motion.gravity.x, y: motion.gravity.y, z: motion.gravity.z)
             self.isDeviceConnected = true
             self.connectionStatus = self.isSimulationMode ? "시뮬레이션 모드" : "연결됨"
 

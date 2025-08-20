@@ -97,22 +97,73 @@ struct ContentView: View {
                             .padding(.vertical, 20)
 
                             VStack(alignment: .leading, spacing: 15) {
-                                Text("머리 방향")
+                                Text("머리 방향 / Attitude（姿勢）") // 한국어 / 일본어
                                     .font(.headline)
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
                                 Divider()
                                     .padding(.vertical, 4)
 
-                                OrientationRow(label: "피치", value: headphoneMotionManager.pitch, description: "위/아래")
-                                OrientationRow(label: "롤", value: headphoneMotionManager.roll, description: "좌/우 기울기")
-                                OrientationRow(label: "요", value: headphoneMotionManager.yaw, description: "좌/우 회전")
+                                OrientationRow(label: "피치 / Pitch（上下）", value: headphoneMotionManager.pitch, description: "위/아래 / 上下")
+                                OrientationRow(label: "롤 / Roll（傾き）", value: headphoneMotionManager.roll, description: "좌/우 기울기 / 左右の傾き")
+                                OrientationRow(label: "요 / Yaw（回転）", value: headphoneMotionManager.yaw, description: "좌/우 회전 / 左右回転")
                             }
                             .padding()
                             .background(Color.secondary.opacity(0.05))
                             .cornerRadius(12)
                             .padding(.horizontal)
                             .padding(.bottom, 20)
+
+                            // 회전 속도
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("회전 속도 / Rotation Rate（回転速度）") // 한국어 / 일본어
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                Divider().padding(.vertical, 4)
+
+                                VectorRow(label: "X", value: headphoneMotionManager.rotationRate.x, unit: "rad/s")
+                                VectorRow(label: "Y", value: headphoneMotionManager.rotationRate.y, unit: "rad/s")
+                                VectorRow(label: "Z", value: headphoneMotionManager.rotationRate.z, unit: "rad/s")
+                            }
+                            .padding()
+                            .background(Color.secondary.opacity(0.05))
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+
+                            // 사용자 가속도
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("가속도 / User Acceleration（ユーザー加速度）")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                Divider().padding(.vertical, 4)
+
+                                VectorRow(label: "X", value: headphoneMotionManager.userAcceleration.x, unit: "g")
+                                VectorRow(label: "Y", value: headphoneMotionManager.userAcceleration.y, unit: "g")
+                                VectorRow(label: "Z", value: headphoneMotionManager.userAcceleration.z, unit: "g")
+                            }
+                            .padding()
+                            .background(Color.secondary.opacity(0.05))
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+
+                            // 중력
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("중력 / Gravity（重力加速度）")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                Divider().padding(.vertical, 4)
+
+                                VectorRow(label: "X", value: headphoneMotionManager.gravity.x, unit: "g")
+                                VectorRow(label: "Y", value: headphoneMotionManager.gravity.y, unit: "g")
+                                VectorRow(label: "Z", value: headphoneMotionManager.gravity.z, unit: "g")
+                            }
+                            .padding()
+                            .background(Color.secondary.opacity(0.05))
+                            .cornerRadius(12)
+                            .padding(.horizontal)
 
                             Spacer(minLength: 100) // macOS에서는 고정 높이 사용
                         }
@@ -348,6 +399,23 @@ struct OrientationRow: View {
                 }
             }
             .frame(height: 6)
+        }
+    }
+}
+
+struct VectorRow: View {
+    let label: String
+    let value: Double
+    let unit: String
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .fontWeight(.medium)
+            Spacer()
+            Text(String(format: "%.3f %@", value, unit))
+                .fontWeight(.bold)
+                .monospacedDigit()
         }
     }
 }
