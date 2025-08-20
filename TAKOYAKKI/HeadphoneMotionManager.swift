@@ -51,6 +51,14 @@ final class HeadphoneMotionManager: ObservableObject {
     @Published private(set) var poorPosturePercentage: Int = 0         // 나쁜 자세 퍼센트
     @Published private(set) var isSimulationMode: Bool = false         // 시뮬레이션 모드 여부
     @Published private(set) var lastError: String? = nil               // 마지막 에러 메시지
+    
+    // MARK: - 사용자 설정 임계값 (저장 가능)
+    @Published var poorPostureThreshold: Double = UserDefaults.standard.object(forKey: "poorPostureThresholdDeg") as? Double ?? -15.0 {
+        didSet { UserDefaults.standard.set(poorPostureThreshold, forKey: "poorPostureThresholdDeg") }
+    }
+    @Published var warningThreshold: Double = UserDefaults.standard.object(forKey: "warningThresholdDeg") as? Double ?? 1.0 {
+        didSet { UserDefaults.standard.set(warningThreshold, forKey: "warningThresholdDeg") }
+    }
     @Published private(set) var rotationRate: (x: Double, y: Double, z: Double) = (0, 0, 0) // 회전 속도(rad/s)
     @Published private(set) var userAcceleration: (x: Double, y: Double, z: Double) = (0, 0, 0) // 사용자 가속도(g)
     @Published private(set) var gravity: (x: Double, y: Double, z: Double) = (0, 0, 0) // 중력 가속도(g)
@@ -67,8 +75,6 @@ final class HeadphoneMotionManager: ObservableObject {
 
     // MARK: - 상수
     private enum Constants {
-        static let poorPostureThreshold: Double = -15.0  // 나쁜 자세 임계값 (도)
-        static let warningThreshold: Double = 1.0       // 경고 임계값 (도)
         static let lowPassFilterFactor: Double = 0.2     // 저역 통과 필터 계수
         static let simulationPitchRange: ClosedRange<Double> = -30.0...30.0  // 시뮬레이션 피치 범위
     }
@@ -275,9 +281,12 @@ final class HeadphoneMotionManager: ObservableObject {
             self.yaw = yaw
             // 시뮬레이션용 회전/가속/중력 값 생성
             self.rotationRate = (
-                x: Double.random(in: -2.0...2.0),
-                y: Double.random(in: -2.0...2.0),
-                z: Double.random(in: -2.0...2.0)
+//                x: Double.random(in: -2.0...2.0),
+//                y: Double.random(in: -2.0...2.0),
+//                z: Double.random(in: -2.0...2.0)
+                x: 2,
+                y: 2,
+                z: 2,
             )
             self.userAcceleration = (
                 x: Double.random(in: -0.2...0.2),
@@ -345,7 +354,7 @@ final class HeadphoneMotionManager: ObservableObject {
         do {
             let currentTime = Date()
 
-            if newPitch > Constants.warningThreshold {
+            if newPitch > warningThreshold {
                 let duration = postureState.lastGoodStateTime.distance(to: currentTime)
                 postureState = duration > 2.0 ?
                     .alert(pitch: newPitch, duration: duration) :
@@ -367,7 +376,7 @@ final class HeadphoneMotionManager: ObservableObject {
             totalSessionTime += timeSinceLastUpdate
             sessionStartTime = currentTime
 
-            if newPitch < Constants.poorPostureThreshold {
+            if newPitch < poorPostureThreshold {
                 if poorPostureStartTime == nil {
                     poorPostureStartTime = currentTime
                 }

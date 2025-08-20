@@ -89,12 +89,39 @@ struct ContentView: View {
 
                             PitchGraphView(
                                 dataPoints: headphoneMotionManager.pitchHistory,
+                                threshold: headphoneMotionManager.poorPostureThreshold,
                                 currentPitch: headphoneMotionManager.pitch,
                                 poorPostureDuration: headphoneMotionManager.poorPostureDuration,
                                 poorPosturePercentage: headphoneMotionManager.poorPosturePercentage
                             )
                             .padding(.horizontal)
                             .padding(.vertical, 20)
+
+                            // 임계값 설정 (한국어/일본어)
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("임계값 설정 / Threshold 設定")
+                                    .font(.headline)
+                                HStack(spacing: 12) {
+                                    Text("경고 / Warning（警告）: \(Int(headphoneMotionManager.warningThreshold))°")
+                                        .frame(width: 220, alignment: .leading)
+                                    Slider(value: Binding(
+                                        get: { headphoneMotionManager.warningThreshold },
+                                        set: { headphoneMotionManager.warningThreshold = $0 }
+                                    ), in: -90...90, step: 1)
+                                }
+                                HStack(spacing: 12) {
+                                    Text("나쁜 자세 / Poor（不良）: \(Int(headphoneMotionManager.poorPostureThreshold))°")
+                                        .frame(width: 220, alignment: .leading)
+                                    Slider(value: Binding(
+                                        get: { headphoneMotionManager.poorPostureThreshold },
+                                        set: { headphoneMotionManager.poorPostureThreshold = $0 }
+                                    ), in: -90...90, step: 1)
+                                }
+                            }
+                            .padding()
+                            .background(Color.secondary.opacity(0.05))
+                            .cornerRadius(12)
+                            .padding(.horizontal)
 
                             VStack(alignment: .leading, spacing: 15) {
                                 Text("머리 방향 / Attitude（姿勢）") // 한국어 / 일본어
@@ -428,7 +455,7 @@ extension Comparable {
 
 public struct PitchGraphView: View {
     public let dataPoints: [Double]
-    public let threshold: Double = -22.0
+    public var threshold: Double = -22.0
     public let currentPitch: Double
     public let poorPostureDuration: TimeInterval
     public let poorPosturePercentage: Int
@@ -439,8 +466,9 @@ public struct PitchGraphView: View {
     }
 
     // 공개 이니셜라이저
-    public init(dataPoints: [Double], currentPitch: Double, poorPostureDuration: TimeInterval, poorPosturePercentage: Int) {
+    public init(dataPoints: [Double], threshold: Double = -22.0, currentPitch: Double, poorPostureDuration: TimeInterval, poorPosturePercentage: Int) {
         self.dataPoints = dataPoints
+        self.threshold = threshold
         self.currentPitch = currentPitch
         self.poorPostureDuration = poorPostureDuration
         self.poorPosturePercentage = poorPosturePercentage
