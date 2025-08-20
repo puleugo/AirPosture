@@ -326,7 +326,7 @@ struct HeadVisualization: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: pitch)
 
             // 사람 아이콘 (macOS에서는 시스템 아이콘 사용)
-            Image(systemName: "person.fill")
+            Image("faceimo")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 196, height: 196)

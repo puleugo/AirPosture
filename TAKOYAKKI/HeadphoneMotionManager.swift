@@ -67,8 +67,8 @@ final class HeadphoneMotionManager: ObservableObject {
 
     // MARK: - 상수
     private enum Constants {
-        static let poorPostureThreshold: Double = -22.0  // 나쁜 자세 임계값 (도)
-        static let warningThreshold: Double = 20.0       // 경고 임계값 (도)
+        static let poorPostureThreshold: Double = -15.0  // 나쁜 자세 임계값 (도)
+        static let warningThreshold: Double = 1.0       // 경고 임계값 (도)
         static let lowPassFilterFactor: Double = 0.2     // 저역 통과 필터 계수
         static let simulationPitchRange: ClosedRange<Double> = -30.0...30.0  // 시뮬레이션 피치 범위
     }
@@ -80,6 +80,7 @@ final class HeadphoneMotionManager: ObservableObject {
         } catch {
             lastError = "초기화 오류: \(error.localizedDescription)"
         }
+        
     }
 
     deinit {
