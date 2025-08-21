@@ -47,6 +47,7 @@ final class HeadphoneMotionManager: ObservableObject {
     @Published private(set) var connectionStatus: String = "시작되지 않음"
     @Published private(set) var postureState: PostureState = .good(postureDuration: 0)  // 자세 상태
     @Published private(set) var pitchHistory: [Double] = []            // 피치 히스토리
+    @Published private(set) var rollHistory: [Double] = []             // 롤 히스토리
     @Published private(set) var poorPostureDuration: TimeInterval = 0  // 나쁜 자세 지속 시간
     @Published private(set) var poorPosturePercentage: Int = 0         // 나쁜 자세 퍼센트
     @Published private(set) var isSimulationMode: Bool = false         // 시뮬레이션 모드 여부
@@ -59,9 +60,13 @@ final class HeadphoneMotionManager: ObservableObject {
     @Published var warningThreshold: Double = UserDefaults.standard.object(forKey: "warningThresholdDeg") as? Double ?? 1.0 {
         didSet { UserDefaults.standard.set(warningThreshold, forKey: "warningThresholdDeg") }
     }
+    @Published var rollThreshold: Double = UserDefaults.standard.object(forKey: "rollThresholdDeg") as? Double ?? 1.0 {
+        didSet { UserDefaults.standard.set(rollThreshold, forKey: "rollThresholdDeg") }
+    }
     @Published private(set) var rotationRate: (x: Double, y: Double, z: Double) = (0, 0, 0) // 회전 속도(rad/s)
     @Published private(set) var userAcceleration: (x: Double, y: Double, z: Double) = (0, 0, 0) // 사용자 가속도(g)
     @Published private(set) var gravity: (x: Double, y: Double, z: Double) = (0, 0, 0) // 중력 가속도(g)
+    @Published private(set) var isPoorPostureNow: Bool = false         // 현재 시점 나쁜 자세 여부
 
     // MARK: - Private 속성들
     private var motionManager: CMHeadphoneMotionManager?               // 헤드폰 모션 매니저 (옵셔널)
@@ -300,8 +305,13 @@ final class HeadphoneMotionManager: ObservableObject {
             )
             self.isDeviceConnected = true
             self.connectionStatus = "시뮬레이션 모드"
+            // 현재 나쁜 자세 여부 갱신
+            self.isPoorPostureNow = (newPitch < poorPostureThreshold) || (abs(self.roll) > rollThreshold)
 
             try await updatePitchHistory(newPitch)
+            // 롤 히스토리 갱신
+            rollHistory.append(self.roll)
+            if rollHistory.count > maxDataPoints { rollHistory.removeFirst() }
             try await updatePostureState(newPitch: newPitch)
             try await updateSessionTimers(newPitch: newPitch)
         } catch {
@@ -328,8 +338,13 @@ final class HeadphoneMotionManager: ObservableObject {
             self.gravity = (x: motion.gravity.x, y: motion.gravity.y, z: motion.gravity.z)
             self.isDeviceConnected = true
             self.connectionStatus = self.isSimulationMode ? "시뮬레이션 모드" : "연결됨"
+            // 현재 나쁜 자세 여부 갱신
+            self.isPoorPostureNow = (newPitch < poorPostureThreshold) || (abs(self.roll) > rollThreshold)
 
             try await updatePitchHistory(newPitch)
+            // 롤 히스토리 갱신
+            rollHistory.append(self.roll)
+            if rollHistory.count > maxDataPoints { rollHistory.removeFirst() }
             try await updatePostureState(newPitch: newPitch)
             try await updateSessionTimers(newPitch: newPitch)
         } catch {
@@ -354,7 +369,8 @@ final class HeadphoneMotionManager: ObservableObject {
         do {
             let currentTime = Date()
 
-            if newPitch > warningThreshold {
+            // 좋은 자세 검증: Pitch와 Roll 모두 임계값 이내여야 함
+            if newPitch > warningThreshold || abs(roll) > rollThreshold {
                 let duration = postureState.lastGoodStateTime.distance(to: currentTime)
                 postureState = duration > 2.0 ?
                     .alert(pitch: newPitch, duration: duration) :
@@ -376,7 +392,8 @@ final class HeadphoneMotionManager: ObservableObject {
             totalSessionTime += timeSinceLastUpdate
             sessionStartTime = currentTime
 
-            if newPitch < poorPostureThreshold {
+            // 나쁜 자세 누적: Pitch가 임계값 아래이거나 Roll이 임계값을 초과하면 누적
+            if newPitch < poorPostureThreshold || abs(roll) > rollThreshold {
                 if poorPostureStartTime == nil {
                     poorPostureStartTime = currentTime
                 }

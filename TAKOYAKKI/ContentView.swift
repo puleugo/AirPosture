@@ -51,7 +51,7 @@ struct ContentView: View {
 
                                         // 진행률 원
                                         let percentage = Double(headphoneMotionManager.poorPosturePercentage) / 100.0
-                                        let color: Color = headphoneMotionManager.poorPosturePercentage >= 40 ? .red : .green
+                                        let color: Color = headphoneMotionManager.isPoorPostureNow ? .red : (headphoneMotionManager.poorPosturePercentage >= 40 ? .red : .green)
 
                                         Circle()
                                             .trim(from: 0, to: percentage)
@@ -97,6 +97,23 @@ struct ContentView: View {
                             .padding(.horizontal)
                             .padding(.vertical, 20)
 
+                            // 롤 기울기 그래프 (한국어/일본어)
+                            RollGraphView(
+                                dataPoints: headphoneMotionManager.rollHistory,
+                                rollThreshold: headphoneMotionManager.rollThreshold,
+                                currentRoll: headphoneMotionManager.roll
+                            )
+                            .padding(.horizontal)
+                            .padding(.bottom, 8)
+
+                            // 롤 시각화 (그림이 Roll 값에 따라 회전)
+                            RollTiltVisualization(
+                                roll: headphoneMotionManager.roll,
+                                threshold: headphoneMotionManager.rollThreshold
+                            )
+                            .padding(.horizontal)
+                            .padding(.bottom, 20)
+
                             // 임계값 설정 (한국어/일본어)
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("임계값 설정 / Threshold 設定")
@@ -108,6 +125,14 @@ struct ContentView: View {
                                         get: { headphoneMotionManager.warningThreshold },
                                         set: { headphoneMotionManager.warningThreshold = $0 }
                                     ), in: -90...90, step: 1)
+                                }
+                                HStack(spacing: 12) {
+                                    Text("롤 / Roll 閾値（ロール）: \(Int(headphoneMotionManager.rollThreshold))°")
+                                        .frame(width: 220, alignment: .leading)
+                                    Slider(value: Binding(
+                                        get: { headphoneMotionManager.rollThreshold },
+                                        set: { headphoneMotionManager.rollThreshold = $0 }
+                                    ), in: 0...90, step: 1)
                                 }
                                 HStack(spacing: 12) {
                                     Text("나쁜 자세 / Poor（不良）: \(Int(headphoneMotionManager.poorPostureThreshold))°")
@@ -447,6 +472,50 @@ struct VectorRow: View {
     }
 }
 
+struct RollTiltVisualization: View {
+    let roll: Double
+    let threshold: Double
+
+    private var ringColor: Color {
+        abs(roll) > threshold ? .red : .green
+    }
+
+    var body: some View {
+        VStack(alignment: .center, spacing: 8) {
+            Text("롤 시각화 / Roll 可視化")
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ZStack {
+                Circle()
+                    .stroke(ringColor.opacity(0.3), lineWidth: 10)
+                    .frame(width: 160, height: 160)
+
+                Image("faceimo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 120, height: 120)
+                    .rotationEffect(.degrees(roll))
+                    .animation(.easeInOut(duration: 0.2), value: roll)
+            }
+            .frame(maxWidth: .infinity)
+
+            HStack(spacing: 16) {
+                Text(String(format: "현재 롤: %.1f°", roll))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(String(format: "임계값: ±%.0f°", threshold))
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+            }
+        }
+        .padding()
+        .background(Color.secondary.opacity(0.05))
+        .cornerRadius(12)
+    }
+}
+
 extension Comparable {
     func clamped(to limits: ClosedRange<Self>) -> Self {
         return min(max(self, limits.lowerBound), limits.upperBound)
@@ -501,7 +570,7 @@ public struct PitchGraphView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("나쁜 자세 타이머")
+                Text("목 각도")
                     .font(.headline)
                 Spacer()
                 VStack(alignment: .trailing) {
@@ -578,6 +647,114 @@ public struct PitchGraphView: View {
                 Text("나쁨")
                     .font(.caption2)
                     .foregroundColor(.red)
+            }
+        }
+        .padding()
+        .background(Color.secondary.opacity(0.05))
+        .cornerRadius(12)
+    }
+}
+
+public struct RollGraphView: View {
+    public let dataPoints: [Double]
+    public var rollThreshold: Double
+    public let currentRoll: Double
+
+    // 명시적 이니셜라이저로 private 프로퍼티를 노출하지 않음
+    public init(dataPoints: [Double], rollThreshold: Double, currentRoll: Double) {
+        self.dataPoints = dataPoints
+        self.rollThreshold = rollThreshold
+        self.currentRoll = currentRoll
+    }
+
+    private var graphHeight: CGFloat = 100
+    private var graphWidth: CGFloat = 600
+
+    private var normalizedData: [CGFloat] {
+        guard !dataPoints.isEmpty else { return [] }
+        let maxAbs = max(10.0, (dataPoints.map { abs($0) }.max() ?? 10.0), rollThreshold)
+        let minValue = -maxAbs
+        let maxValue = maxAbs
+        let range = maxValue - minValue
+        return dataPoints.map { point in
+            let normalized = (point - minValue) / range
+            return (1 - normalized) * graphHeight
+        }
+    }
+
+    private func yFor(value: Double) -> CGFloat {
+        let maxAbs = max(10.0, (dataPoints.map { abs($0) }.max() ?? 10.0), rollThreshold)
+        let minValue = -maxAbs
+        let maxValue = maxAbs
+        let range = maxValue - minValue
+        let normalized = (value - minValue) / range
+        return (1 - normalized) * graphHeight
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("롤 기울기 / Roll（傾き）")
+                    .font(.headline)
+                Spacer()
+                Text(String(format: "현재: %.1f°", currentRoll))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            ZStack(alignment: .center) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.secondary.opacity(0.1))
+
+                // 0도 기준선
+                Path { path in
+                    let y0 = yFor(value: 0)
+                    path.move(to: CGPoint(x: 0, y: y0))
+                    path.addLine(to: CGPoint(x: graphWidth, y: y0))
+                }
+                .stroke(Color.gray.opacity(0.4), style: StrokeStyle(lineWidth: 1))
+
+                // +임계값 / -임계값 선 (대시)
+                let yp = yFor(value: rollThreshold)
+                let yn = yFor(value: -rollThreshold)
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: yp))
+                    path.addLine(to: CGPoint(x: graphWidth, y: yp))
+                }
+                .stroke(Color.orange.opacity(0.8), style: StrokeStyle(lineWidth: 1, dash: [6]))
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: yn))
+                    path.addLine(to: CGPoint(x: graphWidth, y: yn))
+                }
+                .stroke(Color.orange.opacity(0.8), style: StrokeStyle(lineWidth: 1, dash: [6]))
+
+                // 데이터 선
+                if normalizedData.count > 1 {
+                    Path { path in
+                        let step = graphWidth / CGFloat(normalizedData.count - 1)
+                        path.move(to: CGPoint(x: 0, y: normalizedData[0]))
+                        for i in 1..<normalizedData.count {
+                            path.addLine(to: CGPoint(x: step * CGFloat(i), y: normalizedData[i]))
+                        }
+                    }
+                    .stroke(Color.blue, lineWidth: 4)
+                }
+            }
+            .frame(height: graphHeight)
+            .padding(.vertical, 6)
+
+            HStack {
+                Text("-임계값")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+                Spacer()
+                Text("0°")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("+임계값")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
             }
         }
         .padding()

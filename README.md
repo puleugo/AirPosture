@@ -38,7 +38,8 @@ TAKOYAKKI는 macOS에서 AirPods Pro의 모션 센서를 활용하여 사용자�
 - **나쁜 자세**: 피치 각도가 -22도 미만
 
 ## 개발자
-임채성 (Lim Chae Sung)
+- 임채성 (Lim ChaeSung)
+- 이경근 (Lee GyeongGuen)
 
 ## 라이선스
 MIT License
