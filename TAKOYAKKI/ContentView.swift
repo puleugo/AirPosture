@@ -10,9 +10,9 @@ import SceneKit
 import CoreMotion
 import Combine
 
-// macOS용 AirPods 자세 교정 서비스 메인 뷰
-struct ContentView: View {
-    @StateObject private var headphoneMotionManager = HeadphoneMotionManager()
+// 메인 화면: 피치/롤 시각 자료 + 기준 자세 설정
+struct MainView: View {
+    @EnvironmentObject var headphoneMotionManager: HeadphoneMotionManager
     @State private var connectionAttempts = 0
     @State private var showDebugInfo = false
 
@@ -24,250 +24,62 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 24) {
                     if headphoneMotionManager.isDeviceConnected {
-                        // 시각적 헤드 트래커
-                        VStack(spacing: 8) {
-                            // 헤드 시각화와 자세 퍼센트를 중앙 정렬된 수평 스택으로 배치
-                            HStack(alignment: .center, spacing: 60) {
-                                // 헤드 시각화
-                                HeadVisualization(
-                                    pitch: headphoneMotionManager.pitch,
-                                    roll: headphoneMotionManager.roll,
-                                    yaw: headphoneMotionManager.yaw,
-                                    postureState: headphoneMotionManager.postureState
-                                )
-                                .frame(width: 176, height: 176)
-                                .padding(.trailing, 10)
-
-                                // 나쁜 자세 퍼센트 원형 표시
-                                VStack {
-                                    ZStack {
-                                        // 배경 원
-                                        Circle()
-                                            .stroke(
-                                                Color.gray.opacity(0.2),
-                                                style: StrokeStyle(lineWidth: 12, lineCap: .round)
-                                            )
-                                            .frame(width: 154, height: 154)
-
-                                        // 진행률 원
-                                        let percentage = Double(headphoneMotionManager.poorPosturePercentage) / 100.0
-                                        let color: Color = headphoneMotionManager.isPoorPostureNow ? .red : (headphoneMotionManager.poorPosturePercentage >= 40 ? .red : .green)
-
-                                        Circle()
-                                            .trim(from: 0, to: percentage)
-                                            .stroke(
-                                                color,
-                                                style: StrokeStyle(lineWidth: 12, lineCap: .round)
-                                            )
-                                            .frame(width: 154, height: 154)
-                                            .rotationEffect(.degrees(-90))
-                                            .animation(.easeInOut(duration: 0.3), value: headphoneMotionManager.poorPosturePercentage)
-
-                                        // 퍼센트 텍스트
-                                        VStack(spacing: 2) {
-                                            Text("\(Int(headphoneMotionManager.poorPosturePercentage))%")
-                                                .font(.system(size: 30, weight: .bold, design: .rounded))
-                                                .foregroundColor(color)
-
-                                            Text("나쁜 자세")
-                                                .font(.system(size: 13, weight: .medium))
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-
-                                    Text("나쁜 자세 유지 시간")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                        .padding(.top, 2)
-                                }
-                                .frame(width: 154)
-                                .padding(.leading, 10)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 90)
-                            .padding(.bottom, 90)
-
-                            PitchGraphView(
-                                dataPoints: headphoneMotionManager.pitchHistory,
-                                threshold: headphoneMotionManager.poorPostureThreshold,
-                                warningThreshold: headphoneMotionManager.warningThreshold, // 경고 임계값 전달
-                                referencePitch: headphoneMotionManager.referencePitch,
-                                currentPitch: headphoneMotionManager.pitch,
-                                poorPostureDuration: headphoneMotionManager.poorPostureDuration,
-                                poorPosturePercentage: headphoneMotionManager.poorPosturePercentage
+                        VStack(spacing: 16) {
+                            // 현재 자세 시각화 (피치)
+                            HeadVisualization(
+                                pitch: headphoneMotionManager.pitch,
+                                roll: headphoneMotionManager.roll,
+                                yaw: headphoneMotionManager.yaw,
+                                postureState: headphoneMotionManager.postureState
                             )
-                            .padding(.horizontal)
-                            .padding(.vertical, 20)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 36)
 
-                            // 롤 시각화 (그림이 Roll 값에 따라 회전)
+                            // 좌우 기울기 시각화 (롤)
                             RollTiltVisualization(
                                 roll: headphoneMotionManager.roll,
                                 threshold: headphoneMotionManager.rollThreshold
                             )
                             .padding(.horizontal)
-                            .padding(.bottom, 8)
 
-                            // 롤 기울기 그래프 (한국어/일본어)
-                            RollGraphView(
-                                dataPoints: headphoneMotionManager.rollHistory,
-                                rollThreshold: headphoneMotionManager.rollThreshold,
-                                referenceRoll: headphoneMotionManager.referenceRoll, // 기준점 전달
-                                currentRoll: headphoneMotionManager.roll
-                            )
-                            .padding(.horizontal)
-                            .padding(.bottom, 20)
-
-                            // 임계값 설정 (한국어/일본어)
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("자세 이탈 허용 범위 설정")
-                                    .font(.headline)
-                                HStack(spacing: 12) {
-                                    Text("뒤로 누움(위): \(Int(headphoneMotionManager.warningThreshold))°")
-                                        .frame(width: 220, alignment: .leading)
-                                    Slider(value: Binding(
-                                        get: { headphoneMotionManager.warningThreshold },
-                                        set: { headphoneMotionManager.warningThreshold = $0 }
-                                    ), in: 0...45, step: 1)
-                                }
-                                HStack(spacing: 12) {
-                                    Text("롤 (좌우): \(Int(headphoneMotionManager.rollThreshold))°")
-                                        .frame(width: 220, alignment: .leading)
-                                    Slider(value: Binding(
-                                        get: { headphoneMotionManager.rollThreshold },
-                                        set: { headphoneMotionManager.rollThreshold = $0 }
-                                    ), in: 0...45, step: 1)
-                                }
-                                HStack(spacing: 12) {
-                                    Text("나쁜 자세 (아래로): \(Int(headphoneMotionManager.poorPostureThreshold))°")
-                                        .frame(width: 220, alignment: .leading)
-                                    Slider(value: Binding(
-                                        get: { headphoneMotionManager.poorPostureThreshold },
-                                        set: { headphoneMotionManager.poorPostureThreshold = $0 }
-                                    ), in: -45...0, step: 1)
-                                }
-                            }
-                            .padding()
-                            .background(Color.secondary.opacity(0.05))
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-
-                            // 자세 재설정 버튼
+                            // 기준 자세 설정 버튼
                             VStack {
                                 Button(action: {
-                                    Task {
-                                        await headphoneMotionManager.calibrateBaselinePosture()
-                                    }
+                                    Task { await headphoneMotionManager.calibrateBaselinePosture() }
                                 }) {
                                     HStack {
-                                        Image(systemName: "arrow.triangle.2.circlepath")
-                                        Text("바른 자세 재설정")
+                                        Image(systemName: "scope")
+                                        Text("기준 자세 설정")
                                             .fontWeight(.semibold)
                                     }
                                     .padding()
                                     .frame(maxWidth: .infinity)
-                                    .background(Color.black.opacity(0.8)) // 더 눈에 띄는 배경색
-                                    .foregroundColor(.white) // 흰색 글자색
-                                    .cornerRadius(8) // 둥근 모서리
+                                    .background(Color.black.opacity(0.85))
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
                                 }
+                                Text("현재 자세를 기준으로 저장합니다.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
-                            .background(Color.secondary.opacity(0.05))
-                            .cornerRadius(12)
                             .padding(.horizontal)
-
-
-                            VStack(alignment: .leading, spacing: 15) {
-                                Text("머리 방향 / Attitude（姿勢）") // 한국어 / 일본어
-                                    .font(.headline)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                                Divider()
-                                    .padding(.vertical, 4)
-
-                                OrientationRow(label: "피치 / Pitch（上下）", value: headphoneMotionManager.pitch, description: "위/아래 / 上下")
-                                OrientationRow(label: "롤 / Roll（傾き）", value: headphoneMotionManager.roll, description: "좌/우 기울기 / 左右の傾き")
-                                OrientationRow(label: "요 / Yaw（回転）", value: headphoneMotionManager.yaw, description: "좌/우 회전 / 左右回転")
-                            }
-                            .padding()
-                            .background(Color.secondary.opacity(0.05))
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-                            .padding(.bottom, 20)
-
-                            // 회전 속도
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("회전 속도 / Rotation Rate（回転速度）") // 한국어 / 일본어
-                                    .font(.headline)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                                Divider().padding(.vertical, 4)
-
-                                VectorRow(label: "X", value: headphoneMotionManager.rotationRate.x, unit: "rad/s")
-                                VectorRow(label: "Y", value: headphoneMotionManager.rotationRate.y, unit: "rad/s")
-                                VectorRow(label: "Z", value: headphoneMotionManager.rotationRate.z, unit: "rad/s")
-                            }
-                            .padding()
-                            .background(Color.secondary.opacity(0.05))
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-
-                            // 사용자 가속도
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("가속도 / User Acceleration（ユーザー加速度）")
-                                    .font(.headline)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                                Divider().padding(.vertical, 4)
-
-                                VectorRow(label: "X", value: headphoneMotionManager.userAcceleration.x, unit: "g")
-                                VectorRow(label: "Y", value: headphoneMotionManager.userAcceleration.y, unit: "g")
-                                VectorRow(label: "Z", value: headphoneMotionManager.userAcceleration.z, unit: "g")
-                            }
-                            .padding()
-                            .background(Color.secondary.opacity(0.05))
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-
-                            // 중력
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("중력 / Gravity（重力加速度）")
-                                    .font(.headline)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                                Divider().padding(.vertical, 4)
-
-                                VectorRow(label: "X", value: headphoneMotionManager.gravity.x, unit: "g")
-                                VectorRow(label: "Y", value: headphoneMotionManager.gravity.y, unit: "g")
-                                VectorRow(label: "Z", value: headphoneMotionManager.gravity.z, unit: "g")
-                            }
-                            .padding()
-                            .background(Color.secondary.opacity(0.05))
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-
-                            Spacer(minLength: 100) // macOS에서는 고정 높이 사용
+                            .padding(.bottom, 24)
                         }
-
                     } else {
                         Spacer()
 
-                        VStack(spacing: 25) {
+                        VStack(spacing: 20) {
                             Image(systemName: "airpodspro")
                                 .font(.system(size: 60))
                                 .foregroundColor(.blue)
 
-                            Text("AirPods Pro 연결 대기 중...")
+                            Text("AirPods Pro 연결 대기 중")
                                 .font(.title3)
                                 .foregroundColor(.secondary)
 
                             Button(action: {
                                 connectionAttempts += 1
-                                Task {
-                                    do {
-                                        try await headphoneMotionManager.restart()
-                                    } catch {
-                                        print("재시작 오류: \(error.localizedDescription)")
-                                    }
-                                }
+                                Task { try? await headphoneMotionManager.restart() }
                             }) {
                                 Text("연결 재시도")
                                     .fontWeight(.semibold)
@@ -282,13 +94,11 @@ struct ContentView: View {
                                     Text("연결 상태: \(headphoneMotionManager.connectionStatus)")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
-                                    
                                     if headphoneMotionManager.isSimulationMode {
-                                        Text("시뮬레이션 모드 - AirPods Pro 연결을 기다리는 중")
+                                        Text("시뮬레이션 모드")
                                             .font(.caption2)
                                             .foregroundColor(.blue)
                                     }
-                                    
                                     if let error = headphoneMotionManager.lastError {
                                         Text("오류: \(error)")
                                             .font(.caption2)
@@ -296,9 +106,7 @@ struct ContentView: View {
                                             .multilineTextAlignment(.center)
                                     }
                                 }
-                                .padding(.top, 10)
-                                .multilineTextAlignment(.center)
-                                .frame(maxWidth: .infinity)
+                                .padding(.top, 6)
                             }
                         }
                         .padding()
@@ -310,21 +118,10 @@ struct ContentView: View {
                         Spacer()
                     }
 
-                    Spacer()
-
-                    // 디버그 정보 푸터
+                    // 디버그 토글
                     HStack {
-                        if showDebugInfo {
-                            Text("시도 횟수: \(connectionAttempts)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
                         Spacer()
-
-                        Button(action: {
-                            showDebugInfo.toggle()
-                        }) {
+                        Button(action: { showDebugInfo.toggle() }) {
                             Image(systemName: showDebugInfo ? "info.circle.fill" : "info.circle")
                                 .foregroundColor(.gray)
                         }
@@ -335,20 +132,20 @@ struct ContentView: View {
                 .padding(.horizontal, 5)
             }
             .blur(radius: headphoneMotionManager.isCalibrating ? 10 : 0)
-            
-            // 보정 중 오버레이
+
+            // 보정 중 오버레이 (메인에서 안내)
             if headphoneMotionManager.isCalibrating {
                 Color.black.opacity(0.6)
                     .ignoresSafeArea()
                     .transition(.opacity)
-                
-                VStack(spacing: 20) {
+
+                VStack(spacing: 16) {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         .scaleEffect(2)
-                    
-                    Text("바른 자세를 3초간 유지하세요...")
-                        .font(.title2)
+
+                    Text("바른 자세를 3초간 유지하세요")
+                        .font(.title3)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                 }
@@ -356,33 +153,6 @@ struct ContentView: View {
             }
         }
         .animation(.default, value: headphoneMotionManager.isCalibrating)
-        .onAppear {
-            // 앱이 나타날 때 안전한 초기화
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                headphoneMotionManager.resetSession()
-                Task {
-                    do {
-                        try await headphoneMotionManager.start()
-                    } catch {
-                        print("앱 시작 오류: \(error.localizedDescription)")
-                    }
-                }
-            }
-        }
-        .onDisappear {
-            // 앱이 사라질 때 모션 매니저 중지
-            Task {
-                do {
-                    try await headphoneMotionManager.stop()
-                } catch {
-                    print("앱 중지 오류: \(error.localizedDescription)")
-                }
-            }
-        }
-        .task {
-            // 태스크 시작 시 기본 초기화
-            headphoneMotionManager.resetSession()
-        }
     }
 }
 
@@ -871,4 +641,100 @@ public struct RollGraphView: View {
     }
     
     // PostureState는 HeadphoneMotionManager.swift에 정의됨
+}
+
+// 루트 탭 뷰
+struct RootView: View {
+    @EnvironmentObject var headphoneMotionManager: HeadphoneMotionManager
+
+    var body: some View {
+        TabView {
+            MainView()
+                .tabItem {
+                    Label("메인", systemImage: "house.fill")
+                }
+            SettingsView()
+                .tabItem {
+                    Label("설정", systemImage: "slider.horizontal.3")
+                }
+        }
+        .onAppear {
+            // 안전한 초기화
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                headphoneMotionManager.resetSession()
+                Task { try? await headphoneMotionManager.start() }
+            }
+        }
+        .onDisappear {
+            Task { try? await headphoneMotionManager.stop() }
+        }
+    }
+}
+// 상세 설정 페이지: 허용 범위 + 그래프
+struct SettingsView: View {
+    @EnvironmentObject var headphoneMotionManager: HeadphoneMotionManager
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // 허용 범위 설정
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("허용 범위 설정")
+                        .font(.headline)
+
+                    HStack(spacing: 12) {
+                        Text("위로 젖힘 (피치): \(Int(headphoneMotionManager.warningThreshold))°")
+                            .frame(width: 220, alignment: .leading)
+                        Slider(value: Binding(
+                            get: { headphoneMotionManager.warningThreshold },
+                            set: { headphoneMotionManager.warningThreshold = $0 }
+                        ), in: 0...45, step: 1)
+                    }
+                    HStack(spacing: 12) {
+                        Text("좌우 기울기 (롤): ±\(Int(headphoneMotionManager.rollThreshold))°")
+                            .frame(width: 220, alignment: .leading)
+                        Slider(value: Binding(
+                            get: { headphoneMotionManager.rollThreshold },
+                            set: { headphoneMotionManager.rollThreshold = $0 }
+                        ), in: 0...45, step: 1)
+                    }
+                    HStack(spacing: 12) {
+                        Text("아래로 숙임 (피치): \(Int(headphoneMotionManager.poorPostureThreshold))°")
+                            .frame(width: 220, alignment: .leading)
+                        Slider(value: Binding(
+                            get: { headphoneMotionManager.poorPostureThreshold },
+                            set: { headphoneMotionManager.poorPostureThreshold = $0 }
+                        ), in: -45...0, step: 1)
+                    }
+                }
+                .padding()
+                .background(Color.secondary.opacity(0.05))
+                .cornerRadius(12)
+                .padding(.horizontal)
+
+                // 그래프: 피치
+                PitchGraphView(
+                    dataPoints: headphoneMotionManager.pitchHistory,
+                    threshold: headphoneMotionManager.poorPostureThreshold,
+                    warningThreshold: headphoneMotionManager.warningThreshold,
+                    referencePitch: headphoneMotionManager.referencePitch,
+                    currentPitch: headphoneMotionManager.pitch,
+                    poorPostureDuration: headphoneMotionManager.poorPostureDuration,
+                    poorPosturePercentage: headphoneMotionManager.poorPosturePercentage
+                )
+                .padding(.horizontal)
+
+                // 그래프: 롤
+                RollGraphView(
+                    dataPoints: headphoneMotionManager.rollHistory,
+                    rollThreshold: headphoneMotionManager.rollThreshold,
+                    referenceRoll: headphoneMotionManager.referenceRoll,
+                    currentRoll: headphoneMotionManager.roll
+                )
+                .padding(.horizontal)
+            }
+            .padding(.vertical, 16)
+        }
+        .background(Color.primary.opacity(0.05).ignoresSafeArea())
+    }
 }
