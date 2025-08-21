@@ -557,7 +557,7 @@ struct RollTiltVisualization: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
-                Text(String(format: "임계값: ±%.0f°", threshold))
+                Text(String(format: "허용 범위: ±%.0f°", threshold))
                     .font(.caption2)
                     .foregroundColor(.orange)
             }
@@ -732,7 +732,7 @@ public struct PitchGraphView: View {
             .padding(.trailing, 70) // 레이블 공간 확보
 
             HStack {
-                Text(String(format: "나쁜 자세: %.1f°", poorDisplayThreshold))
+                Text(String(format: "나쁜 자세 허용 범위: %.1f°", poorDisplayThreshold))
                     .font(.caption2)
                     .foregroundColor(.red)
                 Spacer()
@@ -740,7 +740,7 @@ public struct PitchGraphView: View {
                     .font(.caption2)
                     .foregroundColor(.gray)
                 Spacer()
-                Text(String(format: "뒤로 눕기: %.1f°", warningDisplayThreshold))
+                Text(String(format: "뒤로 눕기 허용 범위: %.1f°", warningDisplayThreshold))
                     .font(.caption2)
                     .foregroundColor(.orange)
             }
