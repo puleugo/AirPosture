@@ -430,7 +430,7 @@ struct HeadVisualization: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: postureState)
 
             // 사람 아이콘 (macOS에서는 시스템 아이콘 사용)
-            Image("faceimo")
+            Image("side")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 196, height: 196)
@@ -543,7 +543,7 @@ struct RollTiltVisualization: View {
                     .stroke(ringColor.opacity(0.3), lineWidth: 10)
                     .frame(width: 160, height: 160)
 
-                Image("faceimo")
+                Image("front")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 120, height: 120)
