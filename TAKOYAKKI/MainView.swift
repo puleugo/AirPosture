@@ -87,7 +87,8 @@ struct MainView: View {
                             // 롤 시각화 (그림이 Roll 값에 따라 회전)
                             RollTiltVisualization(
                                 roll: headphoneMotionManager.roll,
-                                threshold: headphoneMotionManager.rollThreshold
+                                threshold: headphoneMotionManager.rollThreshold,
+                                referenceRoll: headphoneMotionManager.referenceRoll
                             )
                             .padding(.horizontal)
                             .padding(.bottom, 8)
@@ -402,10 +403,10 @@ struct OrientationRow: View {
 struct RollTiltVisualization: View {
     let roll: Double
     let threshold: Double
+    let referenceRoll: Double
 
-    private var ringColor: Color {
-        abs(roll) > threshold ? .red : .green
-    }
+    private var relativeRoll: Double { roll - referenceRoll }
+    private var ringColor: Color { abs(relativeRoll) > threshold ? .red : .green }
 
     var body: some View {
         VStack(alignment: .center, spacing: 8) {
@@ -422,13 +423,13 @@ struct RollTiltVisualization: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 120, height: 120)
-                    .rotationEffect(.degrees(roll))
-                    .animation(.easeInOut(duration: 0.2), value: roll)
+                    .rotationEffect(.degrees(relativeRoll))
+                    .animation(.easeInOut(duration: 0.2), value: relativeRoll)
             }
             .frame(maxWidth: .infinity)
 
             HStack(spacing: 16) {
-                Text(String(format: "현재 롤: %.1f°", roll))
+                Text(String(format: "현재 롤: %.1f° (기준 대비 %.1f°)", roll, relativeRoll))
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
