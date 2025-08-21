@@ -408,13 +408,21 @@ final class HeadphoneMotionManager: ObservableObject {
             totalSessionTime += timeSinceLastUpdate
             sessionStartTime = currentTime
 
+            print("--- Session Timer Update ---")
+            print("timeSinceLastUpdate: \(timeSinceLastUpdate)")
+            print("totalSessionTime: \(totalSessionTime)")
+            print("poorPostureDuration: \(poorPostureDuration)")
+            print("poorPosturePercentage: \(poorPosturePercentage)")
+
             // 나쁜 자세 누적: Pitch가 임계값 아래이거나 Roll이 임계값을 초과하면 누적
             if (newPitch - referencePitch) < poorPostureThreshold || abs(roll - referenceRoll) > rollThreshold {
+                print("Posture is BAD.")
                 if poorPostureStartTime == nil {
                     poorPostureStartTime = currentTime
                 }
                 poorPostureDuration += timeSinceLastUpdate
             } else {
+                print("Posture is GOOD.")
                 poorPostureStartTime = nil
             }
         } catch {

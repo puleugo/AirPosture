@@ -99,20 +99,20 @@ struct ContentView: View {
                             .padding(.horizontal)
                             .padding(.vertical, 20)
 
+                            // 롤 시각화 (그림이 Roll 값에 따라 회전)
+                            RollTiltVisualization(
+                                roll: headphoneMotionManager.roll,
+                                threshold: headphoneMotionManager.rollThreshold
+                            )
+                            .padding(.horizontal)
+                            .padding(.bottom, 8)
+
                             // 롤 기울기 그래프 (한국어/일본어)
                             RollGraphView(
                                 dataPoints: headphoneMotionManager.rollHistory,
                                 rollThreshold: headphoneMotionManager.rollThreshold,
                                 referenceRoll: headphoneMotionManager.referenceRoll, // 기준점 전달
                                 currentRoll: headphoneMotionManager.roll
-                            )
-                            .padding(.horizontal)
-                            .padding(.bottom, 8)
-
-                            // 롤 시각화 (그림이 Roll 값에 따라 회전)
-                            RollTiltVisualization(
-                                roll: headphoneMotionManager.roll,
-                                threshold: headphoneMotionManager.rollThreshold
                             )
                             .padding(.horizontal)
                             .padding(.bottom, 20)
@@ -122,7 +122,7 @@ struct ContentView: View {
                                 Text("자세 이탈 허용 범위 설정")
                                     .font(.headline)
                                 HStack(spacing: 12) {
-                                    Text("경고 (위로): \(Int(headphoneMotionManager.warningThreshold))°")
+                                    Text("뒤로 누움(위): \(Int(headphoneMotionManager.warningThreshold))°")
                                         .frame(width: 220, alignment: .leading)
                                     Slider(value: Binding(
                                         get: { headphoneMotionManager.warningThreshold },
@@ -152,22 +152,26 @@ struct ContentView: View {
                             .padding(.horizontal)
 
                             // 자세 재설정 버튼
-                            Button(action: {
-                                Task {
-                                    await headphoneMotionManager.calibrateBaselinePosture()
+                            VStack {
+                                Button(action: {
+                                    Task {
+                                        await headphoneMotionManager.calibrateBaselinePosture()
+                                    }
+                                }) {
+                                    HStack {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                        Text("바른 자세 재설정")
+                                            .fontWeight(.semibold)
+                                    }
+                                    .padding()
+                                    .frame(maxWidth: .infinity)
+                                    .background(Color.black.opacity(0.8)) // 더 눈에 띄는 배경색
+                                    .foregroundColor(.white) // 흰색 글자색
+                                    .cornerRadius(8) // 둥근 모서리
                                 }
-                            }) {
-                                HStack {
-                                    Image(systemName: "arrow.triangle.2.circlepath.camera")
-                                    Text("바른 자세 재설정")
-                                }
-                                .fontWeight(.semibold)
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(Color.indigo.opacity(0.7))
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
                             }
+                            .background(Color.secondary.opacity(0.05))
+                            .cornerRadius(12)
                             .padding(.horizontal)
 
 
@@ -701,12 +705,12 @@ public struct PitchGraphView: View {
                 }
                 
                 // 축 레이블
-                Text("경고")
+                Text("뒤로 누움")
                     .font(.caption)
                     .foregroundColor(.orange)
                     .padding(2)
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 4))
-                    .position(x: graphWidth - 25, y: warningThresholdY - 12)
+                    .position(x: graphWidth - 35, y: warningThresholdY - 12)
                 
                 Text("바른 자세")
                     .font(.caption)
@@ -725,10 +729,10 @@ public struct PitchGraphView: View {
             }
             .frame(height: graphHeight)
             .padding(.vertical, 8)
-            .padding(.trailing, 60) // 레이블 공간 확보
+            .padding(.trailing, 70) // 레이블 공간 확보
 
             HStack {
-                Text(String(format: "임계(아래): %.1f°", poorDisplayThreshold))
+                Text(String(format: "나쁜 자세: %.1f°", poorDisplayThreshold))
                     .font(.caption2)
                     .foregroundColor(.red)
                 Spacer()
@@ -736,7 +740,7 @@ public struct PitchGraphView: View {
                     .font(.caption2)
                     .foregroundColor(.gray)
                 Spacer()
-                Text(String(format: "임계(위): %.1f°", warningDisplayThreshold))
+                Text(String(format: "뒤로 눕기: %.1f°", warningDisplayThreshold))
                     .font(.caption2)
                     .foregroundColor(.orange)
             }
