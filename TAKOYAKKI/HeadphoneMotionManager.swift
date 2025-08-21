@@ -454,7 +454,7 @@ final class HeadphoneMotionManager: ObservableObject {
 }
 
 // MARK: - 자세 상태 열거형
-enum PostureState {
+enum PostureState: Equatable {
     case good(postureDuration: TimeInterval)                    // 좋은 자세
     case warning(pitch: Double, timeAboveThreshold: TimeInterval)  // 경고 자세
     case alert(pitch: Double, duration: TimeInterval)           // 알림 자세

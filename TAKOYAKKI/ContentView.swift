@@ -90,7 +90,8 @@ struct ContentView: View {
                             PitchGraphView(
                                 dataPoints: headphoneMotionManager.pitchHistory,
                                 threshold: headphoneMotionManager.poorPostureThreshold,
-                                referencePitch: headphoneMotionManager.referencePitch, // 기준점 전달
+                                warningThreshold: headphoneMotionManager.warningThreshold, // 경고 임계값 전달
+                                referencePitch: headphoneMotionManager.referencePitch,
                                 currentPitch: headphoneMotionManager.pitch,
                                 poorPostureDuration: headphoneMotionManager.poorPostureDuration,
                                 poorPosturePercentage: headphoneMotionManager.poorPosturePercentage
@@ -393,6 +394,10 @@ struct HeadVisualization: View {
         }
         return false
     }
+    
+    private var stateColor: Color {
+        colorForState(postureState)
+    }
 
     var body: some View {
         ZStack {
@@ -403,29 +408,29 @@ struct HeadVisualization: View {
                 .overlay(
                     Circle()
                         .stroke(
-                            pitch < -22 ? Color.red : Color.green,
+                            stateColor,
                             style: StrokeStyle(
                                 lineWidth: 8,
                                 lineCap: .round
                             )
                         )
                         .opacity(0.7)
-                        .animation(.easeInOut(duration: 0.3), value: pitch)
+                        .animation(.easeInOut(duration: 0.3), value: postureState)
                 )
                 .shadow(
-                    color: (pitch < -22 ? Color.red : Color.green).opacity(0.5),
-                    radius: pitch < -22 ? 10 : 5,
+                    color: stateColor.opacity(0.5),
+                    radius: isAlertActive ? 10 : 5,
                     x: 0,
                     y: 0
                 )
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: pitch)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: postureState)
 
             // 사람 아이콘 (macOS에서는 시스템 아이콘 사용)
             Image("faceimo")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 196, height: 196)
-                .foregroundColor(colorForState(postureState))
+                .foregroundColor(stateColor)
                 .modifier(PulseEffect(isActive: isAlertActive))
                 .rotationEffect(.degrees(pitch))
         }
@@ -434,12 +439,12 @@ struct HeadVisualization: View {
 
     private func colorForState(_ state: PostureState) -> Color {
         switch state {
+        case .good:
+            return .green
         case .alert:
             return .red
         case .warning:
             return .orange
-        default:
-            return .blue
         }
     }
 }
@@ -568,25 +573,36 @@ extension Comparable {
 public struct PitchGraphView: View {
     public let dataPoints: [Double]
     public let threshold: Double
-    public let referencePitch: Double // 기준점
+    public let warningThreshold: Double
+    public let referencePitch: Double
     public let currentPitch: Double
     public let poorPostureDuration: TimeInterval
     public let poorPosturePercentage: Int
 
     // 화면에 표시될 실제 임계값
-    private var displayThreshold: Double {
+    private var poorDisplayThreshold: Double {
         referencePitch + threshold
+    }
+    private var warningDisplayThreshold: Double {
+        referencePitch + warningThreshold
     }
 
     // 선 색상을 결정하는 계산된 속성
     private var lineColor: Color {
-        currentPitch < displayThreshold ? .red : .green
+        if currentPitch < poorDisplayThreshold {
+            return .red
+        } else if currentPitch > warningDisplayThreshold {
+            return .orange
+        } else {
+            return .green
+        }
     }
 
     // 공개 이니셜라이저
-    public init(dataPoints: [Double], threshold: Double, referencePitch: Double, currentPitch: Double, poorPostureDuration: TimeInterval, poorPosturePercentage: Int) {
+    public init(dataPoints: [Double], threshold: Double, warningThreshold: Double, referencePitch: Double, currentPitch: Double, poorPostureDuration: TimeInterval, poorPosturePercentage: Int) {
         self.dataPoints = dataPoints
         self.threshold = threshold
+        self.warningThreshold = warningThreshold
         self.referencePitch = referencePitch
         self.currentPitch = currentPitch
         self.poorPostureDuration = poorPostureDuration
@@ -597,11 +613,11 @@ public struct PitchGraphView: View {
     private var graphWidth: CGFloat = 600
 
     private var yRange: (min: Double, max: Double) {
-        let dataMin = dataPoints.min() ?? displayThreshold
+        let dataMin = dataPoints.min() ?? poorDisplayThreshold
         let dataMax = dataPoints.max() ?? referencePitch
         
-        let lowerBound = min(dataMin, displayThreshold) - 10
-        let upperBound = max(dataMax, referencePitch) + 10
+        let lowerBound = min(dataMin, poorDisplayThreshold) - 10
+        let upperBound = max(dataMax, referencePitch, warningDisplayThreshold) + 10
         return (lowerBound, upperBound)
     }
 
@@ -620,8 +636,12 @@ public struct PitchGraphView: View {
         }
     }
 
-    private var thresholdY: CGFloat {
-        normalize(displayThreshold)
+    private var poorThresholdY: CGFloat {
+        normalize(poorDisplayThreshold)
+    }
+    
+    private var warningThresholdY: CGFloat {
+        normalize(warningDisplayThreshold)
     }
 
     public var body: some View {
@@ -647,7 +667,7 @@ public struct PitchGraphView: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.secondary.opacity(0.1))
                 
-                // 기준선 (0도 또는 기준 피치)
+                // 기준선
                 Path { path in
                     let y = normalize(referencePitch)
                     path.move(to: CGPoint(x: 0, y: y))
@@ -655,12 +675,19 @@ public struct PitchGraphView: View {
                 }
                 .stroke(Color.gray.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
 
-                // 임계값 선
+                // 나쁜 자세 임계값 선
                 Path { path in
-                    path.move(to: CGPoint(x: 0, y: thresholdY))
-                    path.addLine(to: CGPoint(x: graphWidth, y: thresholdY))
+                    path.move(to: CGPoint(x: 0, y: poorThresholdY))
+                    path.addLine(to: CGPoint(x: graphWidth, y: poorThresholdY))
                 }
                 .stroke(Color.red.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [5]))
+                
+                // 경고 임계값 선
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: warningThresholdY))
+                    path.addLine(to: CGPoint(x: graphWidth, y: warningThresholdY))
+                }
+                .stroke(Color.orange.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [5]))
 
                 // 그래프 선
                 if normalizedData.count > 1 {
@@ -674,32 +701,44 @@ public struct PitchGraphView: View {
                 }
                 
                 // 축 레이블
+                Text("경고")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .padding(2)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 4))
+                    .position(x: graphWidth - 25, y: warningThresholdY - 12)
+                
                 Text("바른 자세")
                     .font(.caption)
                     .foregroundColor(.gray)
                     .padding(2)
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 4))
-                    .position(x: graphWidth - 35, y: normalize(referencePitch) - 12)
+                    .position(x: graphWidth - 35, y: normalize(referencePitch))
                 
                 Text("나쁜 자세")
                     .font(.caption)
                     .foregroundColor(.red)
                     .padding(2)
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 4))
-                    .position(x: graphWidth - 35, y: thresholdY + 12)
+                    .position(x: graphWidth - 35, y: poorThresholdY + 12)
 
             }
             .frame(height: graphHeight)
             .padding(.vertical, 8)
+            .padding(.trailing, 60) // 레이블 공간 확보
 
             HStack {
+                Text(String(format: "임계(아래): %.1f°", poorDisplayThreshold))
+                    .font(.caption2)
+                    .foregroundColor(.red)
+                Spacer()
                 Text(String(format: "기준: %.1f°", referencePitch))
                     .font(.caption2)
                     .foregroundColor(.gray)
                 Spacer()
-                Text(String(format: "임계: %.1f°", displayThreshold))
+                Text(String(format: "임계(위): %.1f°", warningDisplayThreshold))
                     .font(.caption2)
-                    .foregroundColor(.red)
+                    .foregroundColor(.orange)
             }
         }
         .padding()
