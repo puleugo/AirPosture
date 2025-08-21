@@ -90,6 +90,7 @@ struct ContentView: View {
                             PitchGraphView(
                                 dataPoints: headphoneMotionManager.pitchHistory,
                                 threshold: headphoneMotionManager.poorPostureThreshold,
+                                referencePitch: headphoneMotionManager.referencePitch, // 기준점 전달
                                 currentPitch: headphoneMotionManager.pitch,
                                 poorPostureDuration: headphoneMotionManager.poorPostureDuration,
                                 poorPosturePercentage: headphoneMotionManager.poorPosturePercentage
@@ -101,6 +102,7 @@ struct ContentView: View {
                             RollGraphView(
                                 dataPoints: headphoneMotionManager.rollHistory,
                                 rollThreshold: headphoneMotionManager.rollThreshold,
+                                referenceRoll: headphoneMotionManager.referenceRoll, // 기준점 전달
                                 currentRoll: headphoneMotionManager.roll
                             )
                             .padding(.horizontal)
@@ -116,37 +118,57 @@ struct ContentView: View {
 
                             // 임계값 설정 (한국어/일본어)
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("임계값 설정 / Threshold 設定")
+                                Text("자세 이탈 허용 범위 설정")
                                     .font(.headline)
                                 HStack(spacing: 12) {
-                                    Text("경고 / Warning（警告）: \(Int(headphoneMotionManager.warningThreshold))°")
+                                    Text("경고 (위로): \(Int(headphoneMotionManager.warningThreshold))°")
                                         .frame(width: 220, alignment: .leading)
                                     Slider(value: Binding(
                                         get: { headphoneMotionManager.warningThreshold },
                                         set: { headphoneMotionManager.warningThreshold = $0 }
-                                    ), in: -90...90, step: 1)
+                                    ), in: 0...45, step: 1)
                                 }
                                 HStack(spacing: 12) {
-                                    Text("롤 / Roll 閾値（ロール）: \(Int(headphoneMotionManager.rollThreshold))°")
+                                    Text("롤 (좌우): \(Int(headphoneMotionManager.rollThreshold))°")
                                         .frame(width: 220, alignment: .leading)
                                     Slider(value: Binding(
                                         get: { headphoneMotionManager.rollThreshold },
                                         set: { headphoneMotionManager.rollThreshold = $0 }
-                                    ), in: 0...90, step: 1)
+                                    ), in: 0...45, step: 1)
                                 }
                                 HStack(spacing: 12) {
-                                    Text("나쁜 자세 / Poor（不良）: \(Int(headphoneMotionManager.poorPostureThreshold))°")
+                                    Text("나쁜 자세 (아래로): \(Int(headphoneMotionManager.poorPostureThreshold))°")
                                         .frame(width: 220, alignment: .leading)
                                     Slider(value: Binding(
                                         get: { headphoneMotionManager.poorPostureThreshold },
                                         set: { headphoneMotionManager.poorPostureThreshold = $0 }
-                                    ), in: -90...90, step: 1)
+                                    ), in: -45...0, step: 1)
                                 }
                             }
                             .padding()
                             .background(Color.secondary.opacity(0.05))
                             .cornerRadius(12)
                             .padding(.horizontal)
+
+                            // 자세 재설정 버튼
+                            Button(action: {
+                                Task {
+                                    await headphoneMotionManager.calibrateBaselinePosture()
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "arrow.triangle.2.circlepath.camera")
+                                    Text("바른 자세 재설정")
+                                }
+                                .fontWeight(.semibold)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(Color.indigo.opacity(0.7))
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                            }
+                            .padding(.horizontal)
+
 
                             VStack(alignment: .leading, spacing: 15) {
                                 Text("머리 방향 / Attitude（姿勢）") // 한국어 / 일본어
@@ -307,7 +329,28 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 5)
             }
+            .blur(radius: headphoneMotionManager.isCalibrating ? 10 : 0)
+            
+            // 보정 중 오버레이
+            if headphoneMotionManager.isCalibrating {
+                Color.black.opacity(0.6)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                
+                VStack(spacing: 20) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(2)
+                    
+                    Text("바른 자세를 3초간 유지하세요...")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                }
+                .transition(.opacity)
+            }
         }
+        .animation(.default, value: headphoneMotionManager.isCalibrating)
         .onAppear {
             // 앱이 나타날 때 안전한 초기화
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -524,47 +567,61 @@ extension Comparable {
 
 public struct PitchGraphView: View {
     public let dataPoints: [Double]
-    public var threshold: Double = -22.0
+    public let threshold: Double
+    public let referencePitch: Double // 기준점
     public let currentPitch: Double
     public let poorPostureDuration: TimeInterval
     public let poorPosturePercentage: Int
 
+    // 화면에 표시될 실제 임계값
+    private var displayThreshold: Double {
+        referencePitch + threshold
+    }
+
     // 선 색상을 결정하는 계산된 속성
     private var lineColor: Color {
-        currentPitch < threshold ? .red : .green
+        currentPitch < displayThreshold ? .red : .green
     }
 
     // 공개 이니셜라이저
-    public init(dataPoints: [Double], threshold: Double = -22.0, currentPitch: Double, poorPostureDuration: TimeInterval, poorPosturePercentage: Int) {
+    public init(dataPoints: [Double], threshold: Double, referencePitch: Double, currentPitch: Double, poorPostureDuration: TimeInterval, poorPosturePercentage: Int) {
         self.dataPoints = dataPoints
         self.threshold = threshold
+        self.referencePitch = referencePitch
         self.currentPitch = currentPitch
         self.poorPostureDuration = poorPostureDuration
         self.poorPosturePercentage = poorPosturePercentage
     }
 
     private var graphHeight: CGFloat = 120
-    // macOS에서는 고정 너비 사용
     private var graphWidth: CGFloat = 600
 
-    private var normalizedData: [CGFloat] {
-        guard !dataPoints.isEmpty else { return [] }
-        let minValue = min(threshold - 10, dataPoints.min() ?? threshold - 10)
-        let maxValue = max(10, dataPoints.max() ?? 10)
-        let range = maxValue - minValue
+    private var yRange: (min: Double, max: Double) {
+        let dataMin = dataPoints.min() ?? displayThreshold
+        let dataMax = dataPoints.max() ?? referencePitch
+        
+        let lowerBound = min(dataMin, displayThreshold) - 10
+        let upperBound = max(dataMax, referencePitch) + 10
+        return (lowerBound, upperBound)
+    }
 
-        return dataPoints.map { point in
-            let normalized = (point - minValue) / range
-            return (1 - normalized) * graphHeight
+    private func normalize(_ value: Double) -> CGFloat {
+        let range = yRange.max - yRange.min
+        guard range > 0 else { return 0.5 * graphHeight } // 범위가 0일 경우 중앙에 표시
+        let normalized = (value - yRange.min) / range
+        return (1 - normalized) * graphHeight
+    }
+
+    private var normalizedData: [CGPoint] {
+        guard !dataPoints.isEmpty else { return [] }
+        let step = graphWidth / CGFloat(dataPoints.count - 1)
+        return dataPoints.enumerated().map {
+            CGPoint(x: step * CGFloat($0.offset), y: normalize($0.element))
         }
     }
 
     private var thresholdY: CGFloat {
-        let minValue = min(threshold - 10, dataPoints.min() ?? threshold - 10)
-        let maxValue = max(10, dataPoints.max() ?? 10)
-        let range = maxValue - minValue
-        let normalizedThreshold = (threshold - minValue) / range
-        return (1 - normalizedThreshold) * graphHeight
+        normalize(displayThreshold)
     }
 
     public var body: some View {
@@ -589,6 +646,14 @@ public struct PitchGraphView: View {
                 // 그래프 배경
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.secondary.opacity(0.1))
+                
+                // 기준선 (0도 또는 기준 피치)
+                Path { path in
+                    let y = normalize(referencePitch)
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: graphWidth, y: y))
+                }
+                .stroke(Color.gray.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
 
                 // 임계값 선
                 Path { path in
@@ -600,51 +665,39 @@ public struct PitchGraphView: View {
                 // 그래프 선
                 if normalizedData.count > 1 {
                     Path { path in
-                        let step = graphWidth / CGFloat(normalizedData.count - 1)
-                        path.move(to: CGPoint(x: 0, y: normalizedData[0]))
-
-                        for i in 1..<normalizedData.count {
-                            path.addLine(to: CGPoint(x: step * CGFloat(i), y: normalizedData[i]))
+                        path.move(to: normalizedData[0])
+                        for point in normalizedData.dropFirst() {
+                            path.addLine(to: point)
                         }
                     }
-                    .stroke(lineColor, lineWidth: 6) // 선 두께를 300% 증가
-
-                    // 임계값 아래 영역 채우기
-                    Path { path in
-                        let step = graphWidth / CGFloat(normalizedData.count - 1)
-                        path.move(to: CGPoint(x: 0, y: thresholdY))
-
-                        for i in 0..<normalizedData.count {
-                            let y = min(normalizedData[i], thresholdY)
-                            path.addLine(to: CGPoint(x: step * CGFloat(i), y: y))
-                        }
-
-                        path.addLine(to: CGPoint(x: graphWidth, y: thresholdY))
-                        path.closeSubpath()
-                    }
-                    .fill(Color.green.opacity(0.2))
+                    .stroke(lineColor, lineWidth: 2)
                 }
+                
+                // 축 레이블
+                Text("바른 자세")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding(2)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 4))
+                    .position(x: graphWidth - 35, y: normalize(referencePitch) - 12)
+                
+                Text("나쁜 자세")
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .padding(2)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 4))
+                    .position(x: graphWidth - 35, y: thresholdY + 12)
 
-                // 현재 피치 표시기
-                if !normalizedData.isEmpty {
-                    let lastX = graphWidth - 10
-                    let lastY = normalizedData.last ?? 0
-
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 8, height: 8)
-                        .position(x: lastX, y: lastY)
-                }
             }
             .frame(height: graphHeight)
             .padding(.vertical, 8)
 
             HStack {
-                Text("좋음")
+                Text(String(format: "기준: %.1f°", referencePitch))
                     .font(.caption2)
-                    .foregroundColor(.green)
+                    .foregroundColor(.gray)
                 Spacer()
-                Text("나쁨")
+                Text(String(format: "임계: %.1f°", displayThreshold))
                     .font(.caption2)
                     .foregroundColor(.red)
             }
@@ -657,40 +710,28 @@ public struct PitchGraphView: View {
 
 public struct RollGraphView: View {
     public let dataPoints: [Double]
-    public var rollThreshold: Double
+    public let rollThreshold: Double
+    public let referenceRoll: Double // 기준점
     public let currentRoll: Double
-
-    // 명시적 이니셜라이저로 private 프로퍼티를 노출하지 않음
-    public init(dataPoints: [Double], rollThreshold: Double, currentRoll: Double) {
+    
+    public init(dataPoints: [Double], rollThreshold: Double, referenceRoll: Double, currentRoll: Double) {
         self.dataPoints = dataPoints
         self.rollThreshold = rollThreshold
+        self.referenceRoll = referenceRoll
         self.currentRoll = currentRoll
     }
-
+    
     private var graphHeight: CGFloat = 100
     private var graphWidth: CGFloat = 600
-
-    private var normalizedData: [CGFloat] {
-        guard !dataPoints.isEmpty else { return [] }
-        let maxAbs = max(10.0, (dataPoints.map { abs($0) }.max() ?? 10.0), rollThreshold)
-        let minValue = -maxAbs
-        let maxValue = maxAbs
-        let range = maxValue - minValue
-        return dataPoints.map { point in
-            let normalized = (point - minValue) / range
-            return (1 - normalized) * graphHeight
-        }
-    }
-
+    
     private func yFor(value: Double) -> CGFloat {
-        let maxAbs = max(10.0, (dataPoints.map { abs($0) }.max() ?? 10.0), rollThreshold)
-        let minValue = -maxAbs
-        let maxValue = maxAbs
-        let range = maxValue - minValue
-        let normalized = (value - minValue) / range
+        let maxAbs = max(15.0, (dataPoints.map { abs($0 - referenceRoll) }.max() ?? 15.0), rollThreshold) + 5
+        let range = maxAbs * 2
+        let normalized = (value - (referenceRoll - maxAbs)) / range
+        guard range > 0 else { return 0.5 * graphHeight }
         return (1 - normalized) * graphHeight
     }
-
+    
     public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -701,22 +742,22 @@ public struct RollGraphView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-
+            
             ZStack(alignment: .center) {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.secondary.opacity(0.1))
-
-                // 0도 기준선
+                
+                // 기준선
+                let y0 = yFor(value: referenceRoll)
                 Path { path in
-                    let y0 = yFor(value: 0)
                     path.move(to: CGPoint(x: 0, y: y0))
                     path.addLine(to: CGPoint(x: graphWidth, y: y0))
                 }
-                .stroke(Color.gray.opacity(0.4), style: StrokeStyle(lineWidth: 1))
-
+                .stroke(Color.gray.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
+                
                 // +임계값 / -임계값 선 (대시)
-                let yp = yFor(value: rollThreshold)
-                let yn = yFor(value: -rollThreshold)
+                let yp = yFor(value: referenceRoll + rollThreshold)
+                let yn = yFor(value: referenceRoll - rollThreshold)
                 Path { path in
                     path.move(to: CGPoint(x: 0, y: yp))
                     path.addLine(to: CGPoint(x: graphWidth, y: yp))
@@ -727,32 +768,56 @@ public struct RollGraphView: View {
                     path.addLine(to: CGPoint(x: graphWidth, y: yn))
                 }
                 .stroke(Color.orange.opacity(0.8), style: StrokeStyle(lineWidth: 1, dash: [6]))
-
+                
                 // 데이터 선
-                if normalizedData.count > 1 {
+                if dataPoints.count > 1 {
                     Path { path in
-                        let step = graphWidth / CGFloat(normalizedData.count - 1)
-                        path.move(to: CGPoint(x: 0, y: normalizedData[0]))
-                        for i in 1..<normalizedData.count {
-                            path.addLine(to: CGPoint(x: step * CGFloat(i), y: normalizedData[i]))
+                        let step = graphWidth / CGFloat(dataPoints.count - 1)
+                        let points = dataPoints.enumerated().map { CGPoint(x: step * CGFloat($0.offset), y: yFor(value: $0.element)) }
+                        path.move(to: points[0])
+                        for point in points.dropFirst() {
+                            path.addLine(to: point)
                         }
                     }
-                    .stroke(Color.blue, lineWidth: 4)
+                    .stroke(Color.blue, lineWidth: 2)
                 }
+                
+                // 축 레이블
+                Text("바른 자세")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding(2)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 4))
+                    .position(x: graphWidth - 35, y: y0)
+
+                Text("나쁜 자세")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .padding(2)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 4))
+                    .position(x: graphWidth - 35, y: yp - 12)
+                
+                Text("나쁜 자세")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .padding(2)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 4))
+                    .position(x: graphWidth - 35, y: yn + 12)
+
             }
             .frame(height: graphHeight)
             .padding(.vertical, 6)
-
+            
             HStack {
-                Text("-임계값")
+                Text(String(format: "-%.0f°", rollThreshold))
                     .font(.caption2)
                     .foregroundColor(.orange)
                 Spacer()
-                Text("0°")
+                Text(String(format: "기준: %.1f°", referenceRoll))
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.gray)
                 Spacer()
-                Text("+임계값")
+                Text(String(format: "+%.0f°", rollThreshold))
                     .font(.caption2)
                     .foregroundColor(.orange)
             }
@@ -761,6 +826,6 @@ public struct RollGraphView: View {
         .background(Color.secondary.opacity(0.05))
         .cornerRadius(12)
     }
+    
+    // PostureState는 HeadphoneMotionManager.swift에 정의됨
 }
-
-// PostureState는 HeadphoneMotionManager.swift에 정의됨

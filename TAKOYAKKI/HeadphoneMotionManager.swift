@@ -67,12 +67,15 @@ final class HeadphoneMotionManager: ObservableObject {
     @Published private(set) var userAcceleration: (x: Double, y: Double, z: Double) = (0, 0, 0) // 사용자 가속도(g)
     @Published private(set) var gravity: (x: Double, y: Double, z: Double) = (0, 0, 0) // 중력 가속도(g)
     @Published private(set) var isPoorPostureNow: Bool = false         // 현재 시점 나쁜 자세 여부
+    @Published private(set) var isCalibrating: Bool = false            // 자세 교정 중인지 여부
 
     // MARK: - Private 속성들
     private var motionManager: CMHeadphoneMotionManager?               // 헤드폰 모션 매니저 (옵셔널)
     private var cancellables = Set<AnyCancellable>()                   // 구독 취소 가능한 객체들
     private var poorPostureStartTime: Date?                            // 나쁜 자세 시작 시간
     private var sessionStartTime: Date = Date()                        // 세션 시작 시간
+    var referencePitch: Double = 0.0                           // 기준 피치
+    var referenceRoll: Double = 0.0                            // 기준 롤
     @Published private var totalSessionTime: TimeInterval = 0          // 총 세션 시간
     private let maxDataPoints = 100                                    // 최대 데이터 포인트 수
     private let motionUpdateInterval: TimeInterval = 1.0/30.0          // 30 FPS 업데이트 간격 (낮춤)
@@ -157,6 +160,19 @@ final class HeadphoneMotionManager: ObservableObject {
         } catch {
             lastError = "세션 리셋 오류: \(error.localizedDescription)"
         }
+    }
+
+    @MainActor
+    func calibrateBaselinePosture() async {
+        isCalibrating = true
+        // 사용자에게 자세를 잡을 시간을 줌 (예: 3초)
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        
+        self.referencePitch = self.pitch
+        self.referenceRoll = self.roll
+        
+        isCalibrating = false
+        // 보정이 완료되었음을 알리는 로직 추가 가능 (예: UI 업데이트)
     }
 
     // MARK: - Private 메서드들
@@ -305,8 +321,8 @@ final class HeadphoneMotionManager: ObservableObject {
             )
             self.isDeviceConnected = true
             self.connectionStatus = "시뮬레이션 모드"
-            // 현재 나쁜 자세 여부 갱신
-            self.isPoorPostureNow = (newPitch < poorPostureThreshold) || (abs(self.roll) > rollThreshold)
+            // 현재 나쁜 자세 여부 갱신 (기준 자세 기준)
+            self.isPoorPostureNow = ((newPitch - referencePitch) < poorPostureThreshold) || (abs(self.roll - referenceRoll) > rollThreshold)
 
             try await updatePitchHistory(newPitch)
             // 롤 히스토리 갱신
@@ -338,8 +354,8 @@ final class HeadphoneMotionManager: ObservableObject {
             self.gravity = (x: motion.gravity.x, y: motion.gravity.y, z: motion.gravity.z)
             self.isDeviceConnected = true
             self.connectionStatus = self.isSimulationMode ? "시뮬레이션 모드" : "연결됨"
-            // 현재 나쁜 자세 여부 갱신
-            self.isPoorPostureNow = (newPitch < poorPostureThreshold) || (abs(self.roll) > rollThreshold)
+            // 현재 나쁜 자세 여부 갱신 (기준 자세 기준)
+            self.isPoorPostureNow = ((newPitch - referencePitch) < poorPostureThreshold) || (abs(self.roll - referenceRoll) > rollThreshold)
 
             try await updatePitchHistory(newPitch)
             // 롤 히스토리 갱신
@@ -369,8 +385,8 @@ final class HeadphoneMotionManager: ObservableObject {
         do {
             let currentTime = Date()
 
-            // 좋은 자세 검증: Pitch와 Roll 모두 임계값 이내여야 함
-            if newPitch > warningThreshold || abs(roll) > rollThreshold {
+            // 좋은 자세 검증: Pitch와 Roll 모두 기준 자세의 임계값 이내여야 함
+            if (newPitch - referencePitch) > warningThreshold || abs(roll - referenceRoll) > rollThreshold {
                 let duration = postureState.lastGoodStateTime.distance(to: currentTime)
                 postureState = duration > 2.0 ?
                     .alert(pitch: newPitch, duration: duration) :
@@ -393,7 +409,7 @@ final class HeadphoneMotionManager: ObservableObject {
             sessionStartTime = currentTime
 
             // 나쁜 자세 누적: Pitch가 임계값 아래이거나 Roll이 임계값을 초과하면 누적
-            if newPitch < poorPostureThreshold || abs(roll) > rollThreshold {
+            if (newPitch - referencePitch) < poorPostureThreshold || abs(roll - referenceRoll) > rollThreshold {
                 if poorPostureStartTime == nil {
                     poorPostureStartTime = currentTime
                 }
