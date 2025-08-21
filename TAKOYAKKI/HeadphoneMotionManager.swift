@@ -10,6 +10,13 @@ import Combine
 import CoreMotion
 import AVFoundation
 
+// 전역 에어팟 연결 정보
+struct GlobalAirPodsConnection {
+    static var isConnected: Bool = false
+    static var status: String = "시작되지 않음"
+    static var isSimulationMode: Bool = false
+}
+
 // macOS용 AirPods 모션 데이터 관리자 (안전한 버전)
 
 // MARK: - 커스텀 에러 타입
@@ -44,14 +51,20 @@ final class HeadphoneMotionManager: ObservableObject {
     @Published private(set) var pitch: Double = 0.0                    // 피치 (위아래 각도)
     @Published private(set) var roll: Double = 0.0                     // 롤 (좌우 기울기 각도)
     @Published private(set) var yaw: Double = 0.0                      // 요 (좌우 회전 각도)
-    @Published private(set) var isDeviceConnected: Bool = false        // 디바이스 연결 상태
-    @Published private(set) var connectionStatus: String = "시작되지 않음"
+    @Published private(set) var isDeviceConnected: Bool = false {      // 디바이스 연결 상태
+        didSet { GlobalAirPodsConnection.isConnected = isDeviceConnected }
+    }
+    @Published private(set) var connectionStatus: String = "시작되지 않음" {
+        didSet { GlobalAirPodsConnection.status = connectionStatus }
+    }
     @Published private(set) var postureState: PostureState = .good(postureDuration: 0)  // 자세 상태
     @Published private(set) var pitchHistory: [Double] = []            // 피치 히스토리
     @Published private(set) var rollHistory: [Double] = []             // 롤 히스토리
     @Published private(set) var poorPostureDuration: TimeInterval = 0  // 나쁜 자세 지속 시간
     @Published private(set) var poorPosturePercentage: Int = 0         // 나쁜 자세 퍼센트
-    @Published private(set) var isSimulationMode: Bool = false         // 시뮬레이션 모드 여부
+    @Published private(set) var isSimulationMode: Bool = false {       // 시뮬레이션 모드 여부
+        didSet { GlobalAirPodsConnection.isSimulationMode = isSimulationMode }
+    }
     @Published private(set) var lastError: String? = nil               // 마지막 에러 메시지
     
     // MARK: - 사용자 설정 임계값 (저장 가능)
@@ -87,7 +100,8 @@ final class HeadphoneMotionManager: ObservableObject {
     private var simulationTimer: Timer?                                // 시뮬레이션용 타이머
     private var audioPlayer: AVAudioPlayer?                            // 알림 사운드 플레이어
     private var lastAlertPlayTime: Date?                               // 마지막 알림 재생 시각
-    private let alertSoundCooldown: TimeInterval = 10                  // 알림 쿨다운(초)
+    private let alertSoundCooldown: TimeInterval = 1                  // 알림 쿨다운(초)
+    private let audioQueue = DispatchQueue(label: "com.takoyakki.audioFeedback", qos: .userInitiated)
 
     // MARK: - 상수
     private enum Constants {
@@ -102,7 +116,10 @@ final class HeadphoneMotionManager: ObservableObject {
         } catch {
             lastError = "초기화 오류: \(error.localizedDescription)"
         }
-        
+        // 전역 연결 상태 초기화 반영
+        GlobalAirPodsConnection.isConnected = isDeviceConnected
+        GlobalAirPodsConnection.status = connectionStatus
+        GlobalAirPodsConnection.isSimulationMode = isSimulationMode
     }
 
     deinit {
@@ -425,16 +442,9 @@ final class HeadphoneMotionManager: ObservableObject {
                     .alert(pitch: newPitch, duration: duration) :
                     .warning(pitch: newPitch, timeAboveThreshold: duration)
                 postureState = newState
-
-                // 나쁜 자세(Alert)로 전환되면 알림 사운드 재생 (쿨다운 적용)
-                if case .alert = newState {
-                    // 이전 상태가 alert가 아닐 때만 사운드 재생
-                    switch previousState {
-                    case .alert:
-                        break
-                    default:
-                        playAlertSoundIfAllowed()
-                    }
+                // 좋은 → (경고/알림)으로 처음 넘어갈 때 즉시 피드백음
+                if case .good = previousState {
+                    playAlertSoundIfAllowed()
                 }
             } else {
                 let duration = currentTime.timeIntervalSince(sessionStartTime)
@@ -520,26 +530,23 @@ final class HeadphoneMotionManager: ObservableObject {
     // MARK: - Alert Sound
     private func playAlertSoundIfAllowed() {
         let now = Date()
-        if let last = lastAlertPlayTime, now.timeIntervalSince(last) < alertSoundCooldown {
-            return
-        }
+        if let last = lastAlertPlayTime, now.timeIntervalSince(last) < alertSoundCooldown { return }
+        lastAlertPlayTime = now
 
-        do {
-            if audioPlayer == nil {
-                guard let url = Bundle.main.url(forResource: "default_notification", withExtension: "wav") else {
-                    lastError = "알림 사운드 파일을 찾을 수 없습니다."
-                    return
+        Thread.detachNewThread {
+            autoreleasepool {
+                guard let url = Bundle.main.url(forResource: "default_notification", withExtension: "wav") else { return }
+                do {
+                    let player = try AVAudioPlayer(contentsOf: url)
+                    player.prepareToPlay()
+                    player.play()
+                    // 재생이 유지되도록 스레드를 잠시 유지
+                    let duration = max(0.2, min(3.0, player.duration))
+                    Thread.sleep(forTimeInterval: duration)
+                } catch {
+                    NSLog("Audio thread error: \(error.localizedDescription)")
                 }
-                audioPlayer = try AVAudioPlayer(contentsOf: url)
-                audioPlayer?.prepareToPlay()
             }
-
-            audioPlayer?.currentTime = 0
-            audioPlayer?.numberOfLoops = 0
-            audioPlayer?.play()
-            lastAlertPlayTime = now
-        } catch {
-            lastError = "알림 사운드 재생 오류: \(error.localizedDescription)"
         }
     }
 }
