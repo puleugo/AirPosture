@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import CoreMotion
+import AVFoundation
 
 // macOS용 AirPods 모션 데이터 관리자 (안전한 버전)
 
@@ -74,12 +75,19 @@ final class HeadphoneMotionManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()                   // 구독 취소 가능한 객체들
     private var poorPostureStartTime: Date?                            // 나쁜 자세 시작 시간
     private var sessionStartTime: Date = Date()                        // 세션 시작 시간
-    var referencePitch: Double = 0.0                           // 기준 피치
-    var referenceRoll: Double = 0.0                            // 기준 롤
+    @Published var referencePitch: Double = (UserDefaults.standard.object(forKey: "referencePitchDeg") as? Double) ?? 0.0 { // 기준 피치
+        didSet { UserDefaults.standard.set(referencePitch, forKey: "referencePitchDeg") }
+    }
+    @Published var referenceRoll: Double = (UserDefaults.standard.object(forKey: "referenceRollDeg") as? Double) ?? 0.0 { // 기준 롤
+        didSet { UserDefaults.standard.set(referenceRoll, forKey: "referenceRollDeg") }
+    }
     @Published private var totalSessionTime: TimeInterval = 0          // 총 세션 시간
     private let maxDataPoints = 100                                    // 최대 데이터 포인트 수
     private let motionUpdateInterval: TimeInterval = 1.0/30.0          // 30 FPS 업데이트 간격 (낮춤)
     private var simulationTimer: Timer?                                // 시뮬레이션용 타이머
+    private var audioPlayer: AVAudioPlayer?                            // 알림 사운드 플레이어
+    private var lastAlertPlayTime: Date?                               // 마지막 알림 재생 시각
+    private let alertSoundCooldown: TimeInterval = 10                  // 알림 쿨다운(초)
 
     // MARK: - 상수
     private enum Constants {
@@ -167,9 +175,28 @@ final class HeadphoneMotionManager: ObservableObject {
         isCalibrating = true
         // 사용자에게 자세를 잡을 시간을 줌 (예: 3초)
         try? await Task.sleep(nanoseconds: 3_000_000_000)
-        
-        self.referencePitch = self.pitch
-        self.referenceRoll = self.roll
+
+        // 최근 데이터의 중앙값/평균으로 안정화된 기준 계산
+        let recentPitches = Array(self.pitchHistory.suffix(30))
+        let recentRolls = Array(self.rollHistory.suffix(30))
+
+        let stabilizedPitch: Double
+        let stabilizedRoll: Double
+
+        if !recentPitches.isEmpty {
+            stabilizedPitch = median(of: recentPitches)
+        } else {
+            stabilizedPitch = self.pitch
+        }
+
+        if !recentRolls.isEmpty {
+            stabilizedRoll = median(of: recentRolls)
+        } else {
+            stabilizedRoll = self.roll
+        }
+
+        self.referencePitch = stabilizedPitch
+        self.referenceRoll = stabilizedRoll
         
         isCalibrating = false
         // 보정이 완료되었음을 알리는 로직 추가 가능 (예: UI 업데이트)
@@ -383,14 +410,32 @@ final class HeadphoneMotionManager: ObservableObject {
 
     private func updatePostureState(newPitch: Double) async throws {
         do {
+            let previousState = postureState
             let currentTime = Date()
 
             // 좋은 자세 검증: Pitch와 Roll 모두 기준 자세의 임계값 이내여야 함
-            if (newPitch - referencePitch) > warningThreshold || abs(roll - referenceRoll) > rollThreshold {
+            let pitchDelta = (newPitch - referencePitch)
+            let isForwardBad = pitchDelta < poorPostureThreshold
+            let isBackwardWarn = pitchDelta > warningThreshold
+            let isRollBad = abs(roll - referenceRoll) > rollThreshold
+
+            if isForwardBad || isBackwardWarn || isRollBad {
                 let duration = postureState.lastGoodStateTime.distance(to: currentTime)
-                postureState = duration > 2.0 ?
+                let newState: PostureState = duration > 2.0 ?
                     .alert(pitch: newPitch, duration: duration) :
                     .warning(pitch: newPitch, timeAboveThreshold: duration)
+                postureState = newState
+
+                // 나쁜 자세(Alert)로 전환되면 알림 사운드 재생 (쿨다운 적용)
+                if case .alert = newState {
+                    // 이전 상태가 alert가 아닐 때만 사운드 재생
+                    switch previousState {
+                    case .alert:
+                        break
+                    default:
+                        playAlertSoundIfAllowed()
+                    }
+                }
             } else {
                 let duration = currentTime.timeIntervalSince(sessionStartTime)
                 postureState = .good(postureDuration: duration)
@@ -436,6 +481,18 @@ final class HeadphoneMotionManager: ObservableObject {
         return previous * (1.0 - Constants.lowPassFilterFactor) + current * Constants.lowPassFilterFactor
     }
     
+    // 중앙값 계산 유틸리티 (잡음에 강함)
+    private func median(of values: [Double]) -> Double {
+        guard !values.isEmpty else { return 0 }
+        let sorted = values.sorted()
+        let mid = sorted.count / 2
+        if sorted.count % 2 == 0 {
+            return (sorted[mid - 1] + sorted[mid]) / 2
+        } else {
+            return sorted[mid]
+        }
+    }
+    
     private func cleanup() async throws {
         do {
             // 모션 매니저 정리
@@ -457,6 +514,32 @@ final class HeadphoneMotionManager: ObservableObject {
         } catch {
             lastError = "정리 오류: \(error.localizedDescription)"
             throw error
+        }
+    }
+
+    // MARK: - Alert Sound
+    private func playAlertSoundIfAllowed() {
+        let now = Date()
+        if let last = lastAlertPlayTime, now.timeIntervalSince(last) < alertSoundCooldown {
+            return
+        }
+
+        do {
+            if audioPlayer == nil {
+                guard let url = Bundle.main.url(forResource: "default_notification", withExtension: "wav") else {
+                    lastError = "알림 사운드 파일을 찾을 수 없습니다."
+                    return
+                }
+                audioPlayer = try AVAudioPlayer(contentsOf: url)
+                audioPlayer?.prepareToPlay()
+            }
+
+            audioPlayer?.currentTime = 0
+            audioPlayer?.numberOfLoops = 0
+            audioPlayer?.play()
+            lastAlertPlayTime = now
+        } catch {
+            lastError = "알림 사운드 재생 오류: \(error.localizedDescription)"
         }
     }
 }
