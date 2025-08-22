@@ -49,13 +49,13 @@ struct SettingsView: View {
 
                         // 임계값 설정
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("자세 이탈 허용 범위 설정")
+                            Text("Set Allowable Posture Deviation Rang")
                                 .font(.headline)
                                 .padding(.bottom, 8)
                             
                             VStack(spacing: 16) {
                                 HStack(spacing: 12) {
-                                    Text("뒤로 누움(위): \(Int(headphoneMotionManager.warningThreshold))°")
+                                    Text("Leaning Back (Up): \(Int(headphoneMotionManager.warningThreshold))°")
                                         .frame(width: 220, alignment: .leading)
                                     Slider(value: Binding(
                                         get: { headphoneMotionManager.warningThreshold },
@@ -68,7 +68,7 @@ struct SettingsView: View {
                                 .cornerRadius(8)
                                 
                                 HStack(spacing: 12) {
-                                    Text("롤 (좌우): \(Int(headphoneMotionManager.rollThreshold))°")
+                                    Text("Tilt(Left/Right): \(Int(headphoneMotionManager.rollThreshold))°")
                                         .frame(width: 220, alignment: .leading)
                                     Slider(value: Binding(
                                         get: { headphoneMotionManager.rollThreshold },
@@ -81,7 +81,7 @@ struct SettingsView: View {
                                 .cornerRadius(8)
                                 
                                 HStack(spacing: 12) {
-                                    Text("나쁜 자세 (아래로): \(Int(headphoneMotionManager.poorPostureThreshold))°")
+                                    Text("Tilt(Up/Down): \(Int(headphoneMotionManager.poorPostureThreshold))°")
                                         .frame(width: 220, alignment: .leading)
                                     Slider(value: Binding(
                                         get: { headphoneMotionManager.poorPostureThreshold },
@@ -101,7 +101,7 @@ struct SettingsView: View {
 
                         // 회전 속도 정보
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("회전 속도 / Rotation Rate（回転速度）")
+                            Text("Rotation Rate")
                                 .font(.headline)
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -118,7 +118,7 @@ struct SettingsView: View {
 
                         // 사용자 가속도
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("가속도 / User Acceleration（ユーザー加速度）")
+                            Text("User Acceleration")
                                 .font(.headline)
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -135,7 +135,7 @@ struct SettingsView: View {
 
                         // 중력
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("중력 / Gravity（重力加速度）")
+                            Text("Gravity")
                                 .font(.headline)
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -159,7 +159,7 @@ struct SettingsView: View {
                                 .font(.system(size: 60))
                                 .foregroundColor(.blue)
 
-                            Text("AirPods Pro 연결 대기 중...")
+                            Text("Waiting for AirPods Pro Connecting...")
                                 .font(.title3)
                                 .foregroundColor(.secondary)
 
@@ -169,11 +169,11 @@ struct SettingsView: View {
                                     do {
                                         try await headphoneMotionManager.restart()
                                     } catch {
-                                        print("재시작 오류: \(error.localizedDescription)")
+                                        print("Restart Error: \(error.localizedDescription)")
                                     }
                                 }
                             }) {
-                                Text("연결 재시도")
+                                Text("Retry Connection")
                                     .fontWeight(.semibold)
                                     .padding(.horizontal, 20)
                                     .padding(.vertical, 10)
@@ -183,18 +183,18 @@ struct SettingsView: View {
 
                             if showDebugInfo {
                                 VStack(spacing: 4) {
-                                    Text("연결 상태: \(headphoneMotionManager.connectionStatus)")
+                                    Text("Connection Status: \(headphoneMotionManager.connectionStatus)")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                     
                                     if headphoneMotionManager.isSimulationMode {
-                                        Text("시뮬레이션 모드 - AirPods Pro 연결을 기다리는 중")
+                                        Text("Simulation Mode - Waiting for AirPods Pro Connection")
                                             .font(.caption2)
                                             .foregroundColor(.blue)
                                     }
                                     
                                     if let error = headphoneMotionManager.lastError {
-                                        Text("오류: \(error)")
+                                        Text("Error: \(error)")
                                             .font(.caption2)
                                             .foregroundColor(.red)
                                             .multilineTextAlignment(.center)
@@ -219,7 +219,7 @@ struct SettingsView: View {
                     // 디버그 정보 푸터
                     HStack {
                         if showDebugInfo {
-                            Text("시도 횟수: \(connectionAttempts)")
+                            Text("Attempts: \(connectionAttempts)")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -247,7 +247,7 @@ struct SettingsView: View {
                     do {
                         try await headphoneMotionManager.start()
                     } catch {
-                        print("앱 시작 오류: \(error.localizedDescription)")
+                        print("App Start Error: \(error.localizedDescription)")
                     }
                 }
             }
@@ -258,7 +258,7 @@ struct SettingsView: View {
                 do {
                     try await headphoneMotionManager.stop()
                 } catch {
-                    print("앱 중지 오류: \(error.localizedDescription)")
+                    print("App Stop Error: \(error.localizedDescription)")
                 }
             }
         }
@@ -364,7 +364,7 @@ public struct PitchGraphView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("목 각도")
+                Text("")
                     .font(.headline)
                 Spacer()
             }
@@ -408,21 +408,21 @@ public struct PitchGraphView: View {
                 }
                 
                 // 축 레이블
-                Text("뒤로 누움")
+                Text("Are you sleep?")
                     .font(.caption)
                     .foregroundColor(.orange)
                     .padding(2)
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 4))
                     .position(x: graphWidth - 35, y: warningThresholdY - 12)
                 
-                Text("바른 자세")
+                Text("Good Posture")
                     .font(.caption)
                     .foregroundColor(.gray)
                     .padding(2)
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 4))
                     .position(x: graphWidth - 35, y: normalize(referencePitch))
                 
-                Text("나쁜 자세")
+                Text("Bad Posture")
                     .font(.caption)
                     .foregroundColor(.red)
                     .padding(2)

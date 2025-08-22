@@ -70,7 +70,7 @@ struct MainView: View {
                                                 .font(.system(size: 30, weight: .bold, design: .rounded))
                                                 .foregroundColor(color)
 
-                                            Text("나쁜 자세")
+                                            Text("Bad Posture")
                                                 .font(.system(size: 13, weight: .medium))
                                                 .foregroundColor(.secondary)
                                         }
@@ -102,7 +102,7 @@ struct MainView: View {
                                 }) {
                                     HStack {
                                         Image(systemName: "arrow.triangle.2.circlepath")
-                                        Text("바른 자세 재설정")
+                                        Text("Set Good Posture")
                                             .fontWeight(.semibold)
                                     }
                                     .padding()
@@ -118,16 +118,16 @@ struct MainView: View {
 
                             // 머리 방향 정보
                             VStack(alignment: .leading, spacing: 15) {
-                                Text("머리 방향 / Attitude（姿勢）")
+                                Text("Head Attitude")
                                     .font(.headline)
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
                                 Divider()
                                     .padding(.vertical, 4)
 
-                                OrientationRow(label: "피치 / Pitch（上下）", value: headphoneMotionManager.pitch, description: "위/아래 / 上下")
-                                OrientationRow(label: "롤 / Roll（傾き）", value: headphoneMotionManager.roll, description: "좌/우 기울기 / 左右の傾き")
-                                OrientationRow(label: "요 / Yaw（回転）", value: headphoneMotionManager.yaw, description: "좌/우 회전 / 左右回転")
+                                OrientationRow(label: "Tilt(Up/Down)", value: headphoneMotionManager.pitch, description: "")
+                                OrientationRow(label: "Tilt(Left/Right)", value: headphoneMotionManager.roll, description: "")
+                                OrientationRow(label: "Turn(Left/Right)", value: headphoneMotionManager.yaw, description: "")
                             }
                             .padding()
                             .background(Color.secondary.opacity(0.05))
@@ -146,7 +146,7 @@ struct MainView: View {
                                 .font(.system(size: 60))
                                 .foregroundColor(.blue)
 
-                            Text("AirPods Pro 연결 대기 중...")
+                            Text("Waiting for AirPods Pro Connecting...")
                                 .font(.title3)
                                 .foregroundColor(.secondary)
 
@@ -160,7 +160,8 @@ struct MainView: View {
                                     }
                                 }
                             }) {
-                                Text("연결 재시도")
+                               
+                                Text("Connect")
                                     .fontWeight(.semibold)
                                     .padding(.horizontal, 20)
                                     .padding(.vertical, 10)
@@ -170,18 +171,18 @@ struct MainView: View {
 
                             if showDebugInfo {
                                 VStack(spacing: 4) {
-                                    Text("연결 상태: \(headphoneMotionManager.connectionStatus)")
+                                    Text("Connecting Status: \(headphoneMotionManager.connectionStatus)")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                     
                                     if headphoneMotionManager.isSimulationMode {
-                                        Text("시뮬레이션 모드 - AirPods Pro 연결을 기다리는 중")
+                                        Text("Simulation Mode - Waiting for  AirPods Pro Connecting...")
                                             .font(.caption2)
                                             .foregroundColor(.blue)
                                     }
                                     
                                     if let error = headphoneMotionManager.lastError {
-                                        Text("오류: \(error)")
+                                        Text("Error: \(error)")
                                             .font(.caption2)
                                             .foregroundColor(.red)
                                             .multilineTextAlignment(.center)
@@ -206,7 +207,7 @@ struct MainView: View {
                     // 디버그 정보 푸터
                     HStack {
                         if showDebugInfo {
-                            Text("시도 횟수: \(connectionAttempts)")
+                            Text("Try Count: \(connectionAttempts)")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -238,7 +239,7 @@ struct MainView: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         .scaleEffect(2)
                     
-                    Text("바른 자세를 3초간 유지하세요...")
+                    Text("Keep Good Posture 3 Seconds...")
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
@@ -255,7 +256,7 @@ struct MainView: View {
                     do {
                         try await headphoneMotionManager.start()
                     } catch {
-                        print("앱 시작 오류: \(error.localizedDescription)")
+                        print("Erorr on bootstrap: \(error.localizedDescription)")
                     }
                 }
             }
@@ -266,7 +267,7 @@ struct MainView: View {
                 do {
                     try await headphoneMotionManager.stop()
                 } catch {
-                    print("앱 중지 오류: \(error.localizedDescription)")
+                    print("Error on Stop: \(error.localizedDescription)")
                 }
             }
         }
@@ -410,9 +411,9 @@ struct RollTiltVisualization: View {
 
     var body: some View {
         VStack(alignment: .center, spacing: 8) {
-            Text("롤 시각화 / Roll 可視化")
+       /*      Text("롤 시각화 / Roll 可視化")
                 .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading) */
 
             ZStack {
                 Circle()
@@ -428,12 +429,12 @@ struct RollTiltVisualization: View {
             }
             .frame(maxWidth: .infinity)
 
-            HStack(spacing: 16) {
-                Text(String(format: "현재 롤: %.1f° (기준 대비 %.1f°)", roll, relativeRoll))
+           HStack(spacing: 16) {
+                Text(String(format: "Current Tilt(Left/Right): %.1f°", roll, relativeRoll))
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
-                Text(String(format: "허용 범위: ±%.0f°", threshold))
+                Text(String(format: "Safe Range: ±%.0f°", threshold))
                     .font(.caption2)
                     .foregroundColor(.orange)
             }

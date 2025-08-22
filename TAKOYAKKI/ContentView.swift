@@ -15,11 +15,11 @@ struct RootView: View {
         TabView {
             MainView()
                 .tabItem {
-                    Label("메인", systemImage: "house.fill")
+                    Label("Main", systemImage: "house.fill")
                 }
             SettingsView()
                 .tabItem {
-                    Label("설정", systemImage: "slider.horizontal.3")
+                    Label("Settings", systemImage: "slider.horizontal.3")
                 }
         }
         .onAppear {
